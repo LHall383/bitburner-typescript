@@ -321,6 +321,8 @@ async function runWithScheduler(
   );
 
   if (schedulerResponse.success) {
+    await ns.scp(script.name, "home", schedulerResponse.host as string);
+
     ns.enableLog("exec");
     const pid = ns.exec(
       script.name,
