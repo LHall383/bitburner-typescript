@@ -43,6 +43,9 @@ export async function sendReceive<T, K>(
   message: Message<T>,
   timeout = 500
 ): Promise<Message<MessageResponse<K>> | undefined> {
+  // get start time for timeout
+  const start = Date.now();
+
   // pack message
   const packedMessage = JSON.stringify(message);
 
@@ -50,11 +53,16 @@ export async function sendReceive<T, K>(
   const portHandle = typeof port === "number" ? ns.getPortHandle(port) : port;
 
   // write message to port
-  while (!portHandle.tryWrite(packedMessage)) await ns.sleep(1);
+  while (!portHandle.tryWrite(packedMessage)) {
+    if (Date.now() > start + timeout) break;
+    await ns.sleep(1);
+  }
 
   // wait for response on port
   let response = undefined;
-  for (let i = 0; i < timeout; i++) {
+  while (true) {
+    if (Date.now() > start + timeout) break;
+
     const m = unpackMessage<MessageResponse<K>>(ns, portHandle.peek());
     if (
       m &&

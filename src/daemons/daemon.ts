@@ -26,6 +26,7 @@ export async function main(ns: NS): Promise<void> {
     upgradedServers: false,
     launchedCorpDaemon: false,
     schedulerPID: 0,
+    dispatcherPID: 0,
     timedCalls: timedCalls,
   } as Flags;
 
@@ -105,12 +106,13 @@ export async function main(ns: NS): Promise<void> {
       await ns.sleep(1000);
     }
 
-    // launch scheduler once all scripts are deployed
+    // launch scheduler & dispatcher once all scripts are deployed
     if (
-      flags.finishedDeploy &&
       flags.upgradedServers &&
-      flags.schedulerPID === 0
+      flags.schedulerPID === 0 &&
+      flags.dispatcherPID === 0
     ) {
+      // launch scheduler
       const schedulerArgs = ["--port", 2];
       ns.getPurchasedServers().forEach((s) => {
         schedulerArgs.push("--ramPool");
@@ -125,6 +127,21 @@ export async function main(ns: NS): Promise<void> {
       ns.print(
         `Launched scheduler with PID: ${flags.schedulerPID} and args: ${schedulerArgs}`
       );
+      ns.toast(`Launched scheduler with PID: ${flags.schedulerPID}`);
+      await ns.sleep(1000);
+
+      // launch dispatcher
+      const dispatcherArgs = ["--port", 3];
+      flags.dispatcherPID = ns.exec(
+        "/services/dispatcher.js",
+        "home",
+        1,
+        ...dispatcherArgs
+      );
+      ns.print(
+        `Launched dispatcher with PID: ${flags.dispatcherPID} and args: ${dispatcherArgs}`
+      );
+      ns.toast(`Launched dispatcher with PID: ${flags.dispatcherPID}`);
       await ns.sleep(1000);
     }
 
@@ -132,13 +149,15 @@ export async function main(ns: NS): Promise<void> {
     if (
       flags.purchasedServers &&
       flags.upgradedServers &&
+      flags.schedulerPID !== 0 &&
+      flags.dispatcherPID !== 0 &&
       hackTargets.length > 0 &&
       stats.servers["home"].maxRam - stats.servers["home"].ramUsed >
         ns.getScriptRam("daemons/hack-daemon.js", "home")
     ) {
       const t = stats.servers[hackTargets[0]];
 
-      if (stats.player.hacking > t.requiredHackingSkill) {
+      if (stats.player.hacking > t.requiredHackingSkill && t.hasAdminRights) {
         const pid = ns.exec(
           "daemons/hack-daemon.js",
           "home",

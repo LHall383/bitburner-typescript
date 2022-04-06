@@ -11,12 +11,18 @@ export async function main(ns: NS): Promise<void> {
   // parse command line args
   const args = ns.flags([
     ["target", "n00dles"],
+    ["deployToPserv", false],
     ["restart", false],
     ["basic", false],
   ]);
 
   // seed server list
-  const serverList = JSON.parse(ns.read("/data/flattened-list.txt")).split(",");
+  const serverList = JSON.parse(ns.read("/data/flattened-list.txt")).split(
+    ","
+  ) as string[];
+  if (!args["deployToPserv"]) {
+    _.remove(serverList, (s) => s.includes("pserv"));
+  }
   ns.print(serverList);
 
   // calc RAM used by script

@@ -13,6 +13,7 @@ export interface Flags {
   upgradedServers: boolean;
   launchedCorpDaemon: boolean;
   schedulerPID: number;
+  dispatcherPID: number;
   timedCalls: TimedCall[];
 }
 
@@ -49,6 +50,7 @@ export interface SchedulerResponse extends SchedulerRequest {
 }
 
 export interface Job {
+  name: string;
   scriptName: string;
   startTime: number;
   endTime: number;

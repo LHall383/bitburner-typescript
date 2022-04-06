@@ -1,8 +1,9 @@
 import { NS, Server } from "@ns";
-import { getStats } from "/modules/helper.js";
+import { getStats, msToTime } from "/modules/helper.js";
 import {
   createMessage,
   getSchedulerMaxRam,
+  packMessage,
   sendReceive,
 } from "/modules/messaging";
 import {
@@ -28,6 +29,7 @@ export async function main(ns: NS): Promise<void> {
     ["hosts", ["pserv-0", "pserv-1"]],
     ["useScheduler", false],
     ["schedulerPort", 2],
+    ["dispatcherPort", 3],
   ]);
 
   let stats = getStats(ns, [args["target"], ...args["hosts"]]);
@@ -161,6 +163,7 @@ export async function main(ns: NS): Promise<void> {
 
     // aggregate jobs
     const hackJob = {
+      name: `H - ${msToTime(endHackTime)}`,
       scriptName: hackScript.name,
       startTime: startHackTime,
       endTime: endHackTime,
@@ -170,10 +173,11 @@ export async function main(ns: NS): Promise<void> {
         "--target",
         args["target"],
         "--id",
-        `H - ${ns.nFormat(endHackTime, "0.0")}`,
+        `H - ${msToTime(endHackTime)}`,
       ],
     };
     const weaken1Job = {
+      name: `W1 - ${msToTime(startWeaken1Time + wTime)}`,
       scriptName: weakenScript.name,
       startTime: startWeaken1Time,
       endTime: startWeaken1Time + wTime,
@@ -183,10 +187,11 @@ export async function main(ns: NS): Promise<void> {
         "--target",
         args["target"],
         "--id",
-        `W1 - ${ns.nFormat(startWeaken1Time + wTime, "0.0")}`,
+        `W1 - ${msToTime(startWeaken1Time + wTime)}`,
       ],
     };
     const growJob = {
+      name: `G - ${msToTime(startGrowTime + gTime)}`,
       scriptName: growScript.name,
       startTime: startGrowTime,
       endTime: startGrowTime + gTime,
@@ -196,10 +201,11 @@ export async function main(ns: NS): Promise<void> {
         "--target",
         args["target"],
         "--id",
-        `G - ${ns.nFormat(startGrowTime + gTime, "0.0")}`,
+        `G - ${msToTime(startGrowTime + gTime)}`,
       ],
     };
     const weaken2Job = {
+      name: `W2 - ${msToTime(startWeaken2Time + wTime)}`,
       scriptName: weakenScript.name,
       startTime: startWeaken2Time,
       endTime: startWeaken2Time + wTime,
@@ -209,7 +215,7 @@ export async function main(ns: NS): Promise<void> {
         "--target",
         args["target"],
         "--id",
-        `W2 - ${ns.nFormat(startWeaken2Time + wTime, "0.0")}`,
+        `W2 - ${msToTime(startWeaken2Time + wTime)}`,
       ],
     };
     const jobs = [hackJob, weaken1Job, growJob, weaken2Job] as Job[];
@@ -217,9 +223,9 @@ export async function main(ns: NS): Promise<void> {
     // output stats about jobs
     for (const job of jobs) {
       ns.print(
-        `${job.args[3].split(" ")[0]} with ${job.threads} threads. ${new Date(
+        `${job.name} with ${job.threads} threads. ${msToTime(
           job.startTime
-        ).toISOString()} -> ${new Date(job.endTime).toISOString()}`
+        )} -> ${msToTime(job.endTime)}`
       );
     }
 
@@ -247,22 +253,19 @@ export async function main(ns: NS): Promise<void> {
       continue;
     }
 
-    // execute scheduled jobs
+    // send jobs to dispatcher to execute
+    for (const job of scheduledJobs) {
+      const packedDispatcherMessage = packMessage(
+        ns,
+        `Dispatch job ${job.name}`,
+        job
+      );
+      ns.getPortHandle(args["dispatcherPort"]).write(packedDispatcherMessage);
+    }
+
+    // get batch end time
     scheduledJobs.sort((a, b) => a.startTime - b.startTime);
     const endBatchTime = scheduledJobs[scheduledJobs.length - 1].endTime;
-    while (scheduledJobs.length > 0) {
-      const job = scheduledJobs.shift() as ScheduledJob;
-      ns.print(`Handling job: ${job.args[3].split(" ")[0]}`);
-
-      // sleep until job start time
-      await sleepUntil(ns, job.startTime);
-
-      // execute job
-      ns.enableLog("exec");
-      const pid = ns.exec(job.scriptName, job.host, job.threads, ...job.args);
-      ns.print(`Job: ${job.args[3].split(" ")[0]} executed with PID: ${pid}`);
-      ns.disableLog("exec");
-    }
 
     // sleep until batch is finished executing
     await sleepUntil(ns, endBatchTime + scheduleBufferTime);
@@ -295,8 +298,7 @@ async function sleepUntil(
 ) {
   const sleepTime = Math.floor(timeMS - Date.now());
   if (sleepTime > 0) {
-    if (verbose)
-      ns.print(`Sleeping ${sleepTime} until ${new Date(timeMS).toISOString()}`);
+    if (verbose) ns.print(`Sleeping ${sleepTime} until ${msToTime(timeMS)}`);
     useAsleep ? await ns.asleep(sleepTime) : await ns.sleep(sleepTime);
   }
 }
@@ -319,12 +321,14 @@ async function runWithScheduler(
   );
 
   if (schedulerResponse.success) {
+    ns.enableLog("exec");
     const pid = ns.exec(
       script.name,
       schedulerResponse.host as string,
       threads,
       ...scriptArgs
     );
+    ns.disableLog("exec");
     ns.print(
       `Executing ${script.name} on ${schedulerResponse.host} for ${ns.nFormat(
         schedulerResponse.endTime - schedulerResponse.startTime,
@@ -397,7 +401,7 @@ async function growToMaxMoney(
         scripts.weakenScript,
         wTime,
         schedulerPort,
-        ["--target", target, "--id", `W - ${ns.nFormat(Date.now(), "0.0")}`]
+        ["--target", target, "--id", `W - ${msToTime(Date.now())}`]
       );
     } else {
       const gThreads = Math.floor(maxRamChunk / scripts.growScript.ram);
@@ -411,7 +415,7 @@ async function growToMaxMoney(
         scripts.growScript,
         gTime,
         schedulerPort,
-        ["--target", target, "--id", `G - ${ns.nFormat(Date.now(), "0.0")}`]
+        ["--target", target, "--id", `G - ${msToTime(Date.now())}`]
       );
     }
 
@@ -450,7 +454,7 @@ async function reduceToMinSecurity(
       scripts.weakenScript,
       wTime,
       schedulerPort,
-      ["--target", target, "--id", `W - ${ns.nFormat(Date.now(), "0.0")}`]
+      ["--target", target, "--id", `W - ${msToTime(Date.now())}`]
     );
 
     await ns.sleep(executeBufferTime);
