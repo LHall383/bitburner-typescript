@@ -45,7 +45,6 @@ export async function main(ns: NS): Promise<void> {
       ns.print(
         `Inserted job at index ${insertIndex}, ${scheduledJobs.length} job(s) in queue`
       );
-      // ns.print(JSON.stringify(scheduledJobs));
     }
 
     // if it's time for the top job, shift and service it
@@ -55,6 +54,17 @@ export async function main(ns: NS): Promise<void> {
       ns.print(
         `Time to service job: ${job.scriptName} on ${job.host} with threads ${job.threads} and args ${job.args}`
       );
+
+      const start = performance.now();
+      await ns.scp(job.scriptName, "home", job.host);
+      const end = performance.now();
+      ns.print(
+        `Copying ${job.scriptName} to ${job.host} took ${ns.nFormat(
+          end - start,
+          "0.000"
+        )} ms`
+      );
+
       ns.enableLog("exec");
       const pid = ns.exec(job.scriptName, job.host, job.threads, ...job.args);
       ns.disableLog("exec");
