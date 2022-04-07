@@ -11,7 +11,14 @@ interface ActionOption {
 
 const bonusTimeMultiplier = 5;
 const contractsNames = ["Tracking", "Retirement", "Bounty Hunter"];
-const operationsNames = ["Investigation"];
+const operationsNames = [
+  "Investigation",
+  "Undercover Operation",
+  "Sting Operation",
+  "Raid",
+  "Stealth Retirement Operation",
+  "Assassination",
+];
 
 export async function main(ns: NS): Promise<void> {
   const args = ns.flags([["loop", true]]);
@@ -63,7 +70,10 @@ export async function main(ns: NS): Promise<void> {
       contract.priority =
         contract.count <= 0
           ? 0
-          : Math.pow(contract.successChance[0], 2 * (1 - staminaPercent)) * 0.8;
+          : Math.pow(
+              contract.successChance[0],
+              Math.max(2 * (1 - staminaPercent), 0.5)
+            ) * 0.8;
       actionOptions.push(contract);
     }
 
@@ -87,7 +97,7 @@ export async function main(ns: NS): Promise<void> {
 
     // priority based on maximum variance in success estimate
     const fieldAnalysis = getActionStats(ns, "general", "Field Analysis");
-    fieldAnalysis.priority = Math.max(...successRanges) > 0 ? 1.0 : 0.0;
+    fieldAnalysis.priority = Math.max(...successRanges) > 0 ? 0.7 : 0.0;
     actionOptions.push(fieldAnalysis);
 
     // if we get really low on stamina, may be worth regenerating
