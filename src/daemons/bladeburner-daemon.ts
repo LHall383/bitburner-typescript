@@ -5,7 +5,13 @@ interface ActionOption {
   name: string;
   priority: number;
   duration: number;
+  count: number;
+  successChance: [number, number];
 }
+
+const bonusTimeMultiplier = 5;
+const contractsNames = ["Tracking", "Retirement", "Bounty Hunter"];
+const operationsNames = ["Investigation"];
 
 export async function main(ns: NS): Promise<void> {
   const args = ns.flags([["loop", true]]);
@@ -37,57 +43,74 @@ export async function main(ns: NS): Promise<void> {
     }
 
     const [currentStamina, maxStamina] = ns.bladeburner.getStamina();
-    const lowStamina = maxStamina * 0.5;
+    const staminaPercent = currentStamina / maxStamina;
 
     ns.print(
-      `Stamina: ${ns.nFormat(
-        (currentStamina / maxStamina) * 100,
-        "0.0"
-      )}% ${ns.nFormat(currentStamina, "0.00")}/${ns.nFormat(
-        maxStamina,
+      `Stamina: ${ns.nFormat(staminaPercent * 100, "0.0")}% ${ns.nFormat(
+        currentStamina,
         "0.00"
-      )}`
+      )}/${ns.nFormat(maxStamina, "0.00")}`
     );
 
-    // handle action
+    // add all action options to the array with a calculated priority
     const actionOptions = [] as ActionOption[];
-    if (currentStamina < lowStamina) {
-      actionOptions.push({
-        type: "general",
-        name: "Field Analysis",
-        priority: 1.0,
-        duration: ns.bladeburner.getActionTime("general", "Field Analysis"),
-      });
-    } else {
-      actionOptions.push({
-        type: "contracts",
-        name: "Tracking",
-        priority:
-          ns.bladeburner.getActionCountRemaining("contracts", "Tracking") > 0
-            ? 1.0
-            : 0.0,
-        duration: ns.bladeburner.getActionTime("contracts", "Tracking"),
-      });
-      actionOptions.push({
-        type: "contracts",
-        name: "Retirement",
-        priority:
-          ns.bladeburner.getActionCountRemaining("contracts", "Retirement") > 0
-            ? 0.8
-            : 0.0,
-        duration: ns.bladeburner.getActionTime("contracts", "Retirement"),
-      });
-      actionOptions.push({
-        type: "contracts",
-        name: "Bounty Hunter",
-        priority:
-          ns.bladeburner.getActionCountRemaining("contracts", "Bounty Hunter") >
-          0
-            ? 0.6
-            : 0.0,
-        duration: ns.bladeburner.getActionTime("contracts", "Bounty Hunter"),
-      });
+
+    // calculate contract options based on minimum success chance
+    const contractsStats = contractsNames.map((name) =>
+      getActionStats(ns, "contracts", name)
+    );
+    for (const contract of contractsStats) {
+      contract.priority =
+        contract.count <= 0
+          ? 0
+          : Math.pow(contract.successChance[0], 2 * (1 - staminaPercent)) * 0.8;
+      actionOptions.push(contract);
     }
+
+    // calculate operations options based on minimum success chance
+    const operationsStats = operationsNames.map((name) =>
+      getActionStats(ns, "operations", name)
+    );
+    for (const operation of operationsStats) {
+      operation.priority =
+        operation.count <= 0
+          ? 0
+          : Math.pow(operation.successChance[0], 4) * 0.9;
+      actionOptions.push(operation);
+    }
+
+    // find diff in success chance estimates
+    const successRanges = [...contractsStats, ...operationsStats].map(
+      (actionOption) =>
+        actionOption.successChance[1] - actionOption.successChance[0]
+    );
+
+    // priority based on maximum variance in success estimate
+    const fieldAnalysis = getActionStats(ns, "general", "Field Analysis");
+    fieldAnalysis.priority = Math.max(...successRanges) > 0 ? 1.0 : 0.0;
+    actionOptions.push(fieldAnalysis);
+
+    // if we get really low on stamina, may be worth regenerating
+    const regenChamber = getActionStats(
+      ns,
+      "general",
+      "Hyperbolic Regeneration Chamber"
+    );
+    regenChamber.priority = Math.pow(1 - staminaPercent, 2);
+    actionOptions.push(regenChamber);
+
+    // if chaos gets really high, do some diplomacy
+    const diplomacy = getActionStats(ns, "general", "Diplomacy");
+    diplomacy.priority = Math.min(
+      ns.bladeburner.getCityChaos(ns.bladeburner.getCity()) / 100,
+      0.95
+    );
+    actionOptions.push(diplomacy);
+
+    // fallback option is always to do some training
+    const training = getActionStats(ns, "general", "Training");
+    training.priority = 0.5;
+    actionOptions.push(training);
 
     // sort action options, highest priority first
     actionOptions.sort((a, b) => b.priority - a.priority);
@@ -95,18 +118,39 @@ export async function main(ns: NS): Promise<void> {
       ns.print("No actions added to priorities");
       await ns.sleep(100);
       continue;
+    } else {
+      ns.print(
+        `Action options: ${JSON.stringify(
+          actionOptions.map((actionOption) => {
+            return `${actionOption.name} ${ns.nFormat(
+              actionOption.priority * 100,
+              "0.00"
+            )}%`;
+          })
+        )}`
+      );
     }
 
+    // pick best action and start it
     const bestAction = actionOptions[0];
     const started = ns.bladeburner.startAction(
       bestAction.type,
       bestAction.name
     );
+
+    // check for bonus time
+    const bonusTime = ns.bladeburner.getBonusTime();
+    const duration =
+      bonusTime > 1000
+        ? Math.ceil(bestAction.duration / 1000 / bonusTimeMultiplier) * 1000
+        : bestAction.duration;
+    // ns.print(`${bonusTime} ${bestAction.duration} ${duration}`);
+
     if (started) {
       ns.print(
-        `Action ${bestAction.type} ${bestAction.name} started for ${bestAction.duration}ms`
+        `Action ${bestAction.type} ${bestAction.name} started for ${duration}ms`
       );
-      await ns.sleep(bestAction.duration);
+      await ns.sleep(duration);
     } else {
       ns.print(`Action ${bestAction.type} ${bestAction.name} failed to start`);
       await ns.sleep(100);
@@ -114,4 +158,15 @@ export async function main(ns: NS): Promise<void> {
 
     await ns.sleep(1);
   } while (args["loop"]);
+}
+
+function getActionStats(ns: NS, type: string, name: string): ActionOption {
+  return {
+    type,
+    name,
+    priority: 0,
+    duration: ns.bladeburner.getActionTime(type, name),
+    count: ns.bladeburner.getActionCountRemaining(type, name),
+    successChance: ns.bladeburner.getActionEstimatedSuccessChance(type, name),
+  };
 }
