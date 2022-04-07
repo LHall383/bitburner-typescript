@@ -1,6 +1,18 @@
 import { NS } from "@ns";
 import { getStats } from "/modules/helper";
-import { Flags, Stats, TimedCall } from "/types";
+import { Stats, TimedCall } from "/types";
+
+interface Flags {
+  finishedDeploy: boolean;
+  purchasedServers: boolean;
+  launchedUpgrades: boolean;
+  upgradedServers: boolean;
+  corpDaemonPID: number;
+  bbDaemonPID: number;
+  schedulerPID: number;
+  dispatcherPID: number;
+  timedCalls: TimedCall[];
+}
 
 export async function main(ns: NS): Promise<void> {
   // parse command line args
@@ -24,7 +36,8 @@ export async function main(ns: NS): Promise<void> {
     purchasedServers: false,
     launchedUpgrades: false,
     upgradedServers: false,
-    launchedCorpDaemon: false,
+    corpDaemonPID: 0,
+    bbDaemonPID: 0,
     schedulerPID: 0,
     dispatcherPID: 0,
     timedCalls: timedCalls,
@@ -87,6 +100,13 @@ export async function main(ns: NS): Promise<void> {
         await timedCall.callback();
         timedCall.lastCalled = now;
       }
+    }
+
+    // if we have are in bb, launch the bb-daemon to manage it
+    if (stats.player.inBladeburner && !flags.bbDaemonPID) {
+      flags.bbDaemonPID = ns.exec("daemons/bladeburner-daemon.js", "home", 1);
+      ns.print(`Launching bladeburner-daemon with PID: ${flags.bbDaemonPID}`);
+      await ns.sleep(1000);
     }
 
     // launch upgrades when servers are fully purchased
@@ -179,10 +199,15 @@ export async function main(ns: NS): Promise<void> {
     }
 
     // if we have a corporation, launch the corp-daemon to manage it
-    if (stats.player.hasCorporation && !flags.launchedCorpDaemon) {
-      ns.exec("daemons/corp-daemon.js", "home", 1, "--loop");
-      flags.launchedCorpDaemon = true;
-      ns.print("Launching corp-daemon");
+    if (stats.player.hasCorporation && !flags.corpDaemonPID) {
+      flags.corpDaemonPID = ns.exec(
+        "daemons/corp-daemon.js",
+        "home",
+        1,
+        "--loop"
+      );
+      ns.print(`Launching corp-daemon with PID: ${flags.corpDaemonPID}`);
+      await ns.sleep(1000);
     }
 
     // TODO: share pserv-0 if we aren't using it

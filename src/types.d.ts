@@ -6,17 +6,6 @@ export interface TimedCall {
   callback: () => Promise<void>;
 }
 
-export interface Flags {
-  finishedDeploy: boolean;
-  purchasedServers: boolean;
-  launchedUpgrades: boolean;
-  upgradedServers: boolean;
-  launchedCorpDaemon: boolean;
-  schedulerPID: number;
-  dispatcherPID: number;
-  timedCalls: TimedCall[];
-}
-
 export interface HUDRow {
   header: string;
   fValue: string;
