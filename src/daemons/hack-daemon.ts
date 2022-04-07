@@ -18,8 +18,8 @@ import {
 const weakenSecurityEffect = 0.05;
 const growSecurityEffect = 0.004;
 const hackSecurityEffect = 0.002;
-const scheduleBufferTime = 1000;
-const executeBufferTime = 200;
+const scheduleBufferTime = 500;
+const executeBufferTime = 250;
 
 export async function main(ns: NS): Promise<void> {
   const args = ns.flags([

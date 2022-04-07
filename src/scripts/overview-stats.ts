@@ -59,7 +59,7 @@ export async function main(ns: NS): Promise<void> {
         (7 in dictSourceFiles || 7 == playerInfo.bitNodeN)
       ) {
         const bbRank = ns.bladeburner.getRank();
-        const bbSP = ns.bladeburner.getRank();
+        const bbSP = ns.bladeburner.getSkillPoints();
         addHud("BB Rank", ns.nFormat(bbRank, "0.0a"));
         addHud("BB SP", ns.nFormat(bbSP, "0.0a"));
       }
