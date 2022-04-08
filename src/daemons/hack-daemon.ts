@@ -30,7 +30,7 @@ interface ScheduledBatch {
 }
 
 const weakenSecurityEffect = 0.05;
-const scheduleBufferTime = 500;
+const scheduleBufferTime = 1000;
 const executeBufferTime = 250;
 
 export async function main(ns: NS): Promise<void> {
@@ -128,6 +128,7 @@ export async function main(ns: NS): Promise<void> {
     }
 
     // if security is not at minimum or money is not at max, notify and fix
+    stats = getStats(ns, [bestTarget]);
     if (
       stats.servers[bestTarget].moneyAvailable <
         stats.servers[bestTarget].moneyMax ||
@@ -152,6 +153,7 @@ export async function main(ns: NS): Promise<void> {
     }
 
     // run up to maxBatchCount batches of HWGW
+    stats = getStats(ns, [bestTarget]);
     printServerStats(ns, stats.servers[bestTarget]);
     await runHWGWBatch(
       ns,
@@ -315,7 +317,8 @@ async function runWeakenBatch(
   const scheduledBatches = await scheduleBatches(ns, batches, schedulerPort);
   const lastBatchTime =
     scheduledBatches.length > 0
-      ? scheduledBatches[scheduledBatches.length - 1].batchEnd
+      ? scheduledBatches[scheduledBatches.length - 1].batchEnd +
+        scheduleBufferTime
       : Date.now() + scheduleBufferTime;
   ns.print(`Successfully scheduled ${scheduledBatches.length} W batches`);
 
@@ -401,7 +404,8 @@ async function runGrowWeakenBatch(
   const scheduledBatches = await scheduleBatches(ns, batches, schedulerPort);
   const lastBatchTime =
     scheduledBatches.length > 0
-      ? scheduledBatches[scheduledBatches.length - 1].batchEnd
+      ? scheduledBatches[scheduledBatches.length - 1].batchEnd +
+        scheduleBufferTime
       : Date.now() + scheduleBufferTime;
   ns.print(`Successfully scheduled ${scheduledBatches.length} GW batches`);
 
@@ -441,12 +445,10 @@ async function runHWGWBatch(
     maxRamChunk,
     scripts
   );
-  const hOffsetThreads = Math.ceil(
-    ns.hackAnalyzeSecurity(hThreads) / weakenSecurityEffect
-  );
-  const gOffsetThreads = Math.ceil(
-    ns.growthAnalyzeSecurity(gThreads) / weakenSecurityEffect
-  );
+  const hOffsetThreads =
+    Math.ceil(ns.hackAnalyzeSecurity(hThreads) / weakenSecurityEffect) + 1;
+  const gOffsetThreads =
+    Math.ceil(ns.growthAnalyzeSecurity(gThreads) / weakenSecurityEffect) + 1;
 
   // calc timings, NOTE: we assume here that weaken is always longest
   const wTime = ns.formulas.hacking.weakenTime(
@@ -523,7 +525,8 @@ async function runHWGWBatch(
   const scheduledBatches = await scheduleBatches(ns, batches, schedulerPort);
   const lastBatchTime =
     scheduledBatches.length > 0
-      ? scheduledBatches[scheduledBatches.length - 1].batchEnd
+      ? scheduledBatches[scheduledBatches.length - 1].batchEnd +
+        scheduleBufferTime
       : Date.now() + scheduleBufferTime;
   ns.print(`Successfully scheduled ${scheduledBatches.length} HWGW batches`);
 
