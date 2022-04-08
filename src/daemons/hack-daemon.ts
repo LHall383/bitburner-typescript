@@ -14,6 +14,7 @@ import {
   ScriptInfo,
   ScriptsInfo,
   Stats,
+  TimedCall,
 } from "/types.js";
 
 interface Batch {
@@ -29,8 +30,6 @@ interface ScheduledBatch {
 }
 
 const weakenSecurityEffect = 0.05;
-const growSecurityEffect = 0.004;
-const hackSecurityEffect = 0.002;
 const scheduleBufferTime = 500;
 const executeBufferTime = 250;
 
@@ -68,8 +67,40 @@ export async function main(ns: NS): Promise<void> {
   const serverList = JSON.parse(ns.read("/data/flattened-list.txt")).split(
     ","
   ) as string[];
-  const bestTarget = await calcBestServer(ns, maxRamChunk, serverList, scripts);
-  ns.print(`Best hack target is '${bestTarget}'`);
+  let { hostname: bestTarget, profit } = await calcBestServer(
+    ns,
+    maxRamChunk,
+    serverList,
+    scripts
+  );
+  ns.print(
+    `Best hack target is '${bestTarget}' at $${ns.nFormat(profit, "0.0a")}/sec`
+  );
+
+  // set up a timed job to recheck most profitable server
+  const timedCalls = [
+    {
+      lastCalled: Date.now(),
+      callEvery: 10 * 60 * 1000,
+      callback: async () => {
+        const maxRamChunk = await getSchedulerMaxRam(ns, args["schedulerPort"]);
+        const response = await calcBestServer(
+          ns,
+          maxRamChunk,
+          serverList,
+          scripts
+        );
+        bestTarget = response.hostname;
+        profit = response.profit;
+        ns.print(
+          `Best hack target is '${bestTarget}' at $${ns.nFormat(
+            profit,
+            "0.0a"
+          )}/sec`
+        );
+      },
+    },
+  ] as TimedCall[];
 
   // grow to max money and reduce to min security
   await prepareServer(
@@ -86,6 +117,15 @@ export async function main(ns: NS): Promise<void> {
   do {
     // update stats
     stats = getStats(ns, [bestTarget]);
+
+    // if it's time, service these functions
+    const now = Date.now();
+    for (const timedCall of timedCalls) {
+      if (now - timedCall.lastCalled > timedCall.callEvery) {
+        await timedCall.callback();
+        timedCall.lastCalled = now;
+      }
+    }
 
     // if security is not at minimum or money is not at max, notify and fix
     if (
@@ -156,44 +196,6 @@ async function sleepUntil(
   }
 }
 
-// async function runWithScheduler(
-//   ns: NS,
-//   threads: number,
-//   script: ScriptInfo,
-//   executionTimeMS: number,
-//   schedulerPort: number,
-//   scriptArgs: string[]
-// ): Promise<void> {
-//   const now = Date.now();
-//   const schedulerResponse = await sendReceiveScheduleRequest(
-//     ns,
-//     threads * script.ram,
-//     schedulerPort,
-//     now,
-//     now + executionTimeMS + scheduleBufferTime + executeBufferTime
-//   );
-
-//   if (schedulerResponse.success) {
-//     await ns.scp(script.name, "home", schedulerResponse.host as string);
-
-//     ns.enableLog("exec");
-//     const pid = ns.exec(
-//       script.name,
-//       schedulerResponse.host as string,
-//       threads,
-//       ...scriptArgs
-//     );
-//     ns.disableLog("exec");
-//     ns.print(
-//       `Executing ${script.name} on ${schedulerResponse.host} for ${ns.nFormat(
-//         schedulerResponse.endTime - schedulerResponse.startTime,
-//         "0.0"
-//       )}ms with PID: ${pid}`
-//     );
-//     await sleepUntil(ns, schedulerResponse.endTime);
-//   }
-// }
-
 async function sendReceiveScheduleRequest(
   ns: NS,
   ram: number,
@@ -222,103 +224,6 @@ async function sendReceiveScheduleRequest(
   } as SchedulerResponse;
   return response ?? defaultResponse;
 }
-
-// async function growToMaxMoney(
-//   ns: NS,
-//   target: string,
-//   scripts: ScriptsInfo,
-//   schedulerPort: number
-// ) {
-//   let stats = getStats(ns, [target]);
-//   ns.print(`Growing ${target} to maximum money`);
-
-//   while (
-//     stats.servers[target].moneyAvailable < stats.servers[target].moneyMax
-//   ) {
-//     printServerStats(ns, stats.servers[target]);
-
-//     const maxRamChunk = await getSchedulerMaxRam(ns, schedulerPort);
-//     const weakenThreshold = Math.max(
-//       stats.servers[target].minDifficulty * 1.5,
-//       stats.servers[target].minDifficulty + 10
-//     );
-
-//     // weaken if security is too strong, otherwise grow
-//     if (stats.servers[target].hackDifficulty > weakenThreshold) {
-//       const wThreads = Math.floor(maxRamChunk / scripts.weakenScript.ram);
-//       const wTime = ns.formulas.hacking.weakenTime(
-//         stats.servers[target],
-//         stats.player
-//       );
-//       await runWithScheduler(
-//         ns,
-//         wThreads,
-//         scripts.weakenScript,
-//         wTime,
-//         schedulerPort,
-//         ["--target", target, "--id", `W - ${msToTime(Date.now())}`]
-//       );
-//     } else {
-//       const gThreads = Math.floor(maxRamChunk / scripts.growScript.ram);
-//       const gTime = ns.formulas.hacking.growTime(
-//         stats.servers[target],
-//         stats.player
-//       );
-//       await runWithScheduler(
-//         ns,
-//         gThreads,
-//         scripts.growScript,
-//         gTime,
-//         schedulerPort,
-//         ["--target", target, "--id", `G - ${msToTime(Date.now())}`]
-//       );
-//     }
-
-//     await ns.sleep(executeBufferTime);
-//     stats = getStats(ns, [target]);
-//   } // end while
-
-//   ns.print("-----Target at maximum money-----");
-//   printServerStats(ns, stats.servers[target]);
-// }
-
-// async function reduceToMinSecurity(
-//   ns: NS,
-//   target: string,
-//   scripts: ScriptsInfo,
-//   schedulerPort: number
-// ) {
-//   let stats = getStats(ns, [target]);
-//   ns.print(`Reducing ${target} to minimum security`);
-
-//   while (
-//     stats.servers[target].hackDifficulty > stats.servers[target].minDifficulty
-//   ) {
-//     printServerStats(ns, stats.servers[target]);
-
-//     const maxRamChunk = await getSchedulerMaxRam(ns, schedulerPort);
-
-//     const wThreads = Math.floor(maxRamChunk / scripts.weakenScript.ram);
-//     const wTime = ns.formulas.hacking.weakenTime(
-//       stats.servers[target],
-//       stats.player
-//     );
-//     await runWithScheduler(
-//       ns,
-//       wThreads,
-//       scripts.weakenScript,
-//       wTime,
-//       schedulerPort,
-//       ["--target", target, "--id", `W - ${msToTime(Date.now())}`]
-//     );
-
-//     await ns.sleep(executeBufferTime);
-//     stats = getStats(ns, [target]);
-//   } // end while
-
-//   ns.print("-----Target at minimum security-----");
-//   printServerStats(ns, stats.servers[target]);
-// }
 
 async function prepareServer(
   ns: NS,
@@ -746,7 +651,7 @@ function calcBestServer(
         maxRamChunk,
         threads.hThreads
       );
-      ns.print(`${ns.nFormat(profit, "$0.0a")}/sec for server '${hostname}'`);
+      // ns.print(`${ns.nFormat(profit, "$0.0a")}/sec for server '${hostname}'`);
       cashPerSec.push({ hostname, profit });
     }
   }
@@ -755,7 +660,7 @@ function calcBestServer(
     hostname: string;
     profit: number;
   };
-  return result?.hostname;
+  return result;
 }
 
 function calcServerProfitability(
