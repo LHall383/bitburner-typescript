@@ -1,3 +1,9 @@
+# This Repository
+
+This repository is my collection of scripts to play the game [Bitburner](https://danielyxie.github.io/bitburner/). For more information on the game, view the repository at https://github.com/danielyxie/bitburner.
+
+# Template Provided Information
+
 ## Extension Recommendations
 
 [vscode-bitburner-connector](https://github.com/bitburner-official/bitburner-vscode) ([vscode extension marketplace](https://marketplace.visualstudio.com/items?itemName=bitburner.bitburner-vscode-integration)) to upload your files into the game
