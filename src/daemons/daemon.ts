@@ -7,12 +7,16 @@ interface Flags {
   purchasedServers: boolean;
   launchedUpgrades: boolean;
   upgradedServers: boolean;
-  corpDaemonPID: number;
   bbDaemonPID: number;
+  corpDaemonPID: number;
+  hackDaemonPID: number;
   schedulerPID: number;
   dispatcherPID: number;
   timedCalls: TimedCall[];
 }
+
+const schedulerPort = 2;
+const dispatcherPort = 3;
 
 export async function main(ns: NS): Promise<void> {
   // parse command line args
@@ -36,8 +40,9 @@ export async function main(ns: NS): Promise<void> {
     purchasedServers: false,
     launchedUpgrades: false,
     upgradedServers: false,
-    corpDaemonPID: 0,
     bbDaemonPID: 0,
+    corpDaemonPID: 0,
+    hackDaemonPID: 0,
     schedulerPID: 0,
     dispatcherPID: 0,
     timedCalls: timedCalls,
@@ -129,40 +134,45 @@ export async function main(ns: NS): Promise<void> {
     // launch scheduler & dispatcher once all scripts are deployed
     if (
       flags.upgradedServers &&
-      flags.schedulerPID === 0 &&
-      flags.dispatcherPID === 0
+      (flags.schedulerPID === 0 || flags.dispatcherPID === 0)
     ) {
       // launch scheduler
-      const schedulerArgs = ["--port", 2];
-      ns.getPurchasedServers().forEach((s) => {
-        schedulerArgs.push("--ramPool");
-        schedulerArgs.push(s);
-      });
-      flags.schedulerPID = ns.exec(
-        "/services/scheduler.js",
-        "home",
-        1,
-        ...schedulerArgs
-      );
-      ns.print(
-        `Launched scheduler with PID: ${flags.schedulerPID} and args: ${schedulerArgs}`
-      );
-      ns.toast(`Launched scheduler with PID: ${flags.schedulerPID}`);
-      await ns.sleep(1000);
+      if (flags.schedulerPID === 0) {
+        const schedulerArgs = ["--port", schedulerPort];
+        ns.getPurchasedServers().forEach((s) => {
+          schedulerArgs.push("--ramPool");
+          schedulerArgs.push(s);
+        });
+        flags.schedulerPID = ns.exec(
+          "/services/scheduler.js",
+          "home",
+          1,
+          ...schedulerArgs
+        );
+        ns.print(
+          `Launched scheduler with PID: ${flags.schedulerPID} and args: ${schedulerArgs}`
+        );
+        if (flags.schedulerPID !== 0)
+          ns.toast(`Launched scheduler with PID: ${flags.schedulerPID}`);
+        await ns.sleep(1000);
+      }
 
       // launch dispatcher
-      const dispatcherArgs = ["--port", 3];
-      flags.dispatcherPID = ns.exec(
-        "/services/dispatcher.js",
-        "home",
-        1,
-        ...dispatcherArgs
-      );
-      ns.print(
-        `Launched dispatcher with PID: ${flags.dispatcherPID} and args: ${dispatcherArgs}`
-      );
-      ns.toast(`Launched dispatcher with PID: ${flags.dispatcherPID}`);
-      await ns.sleep(1000);
+      if (flags.dispatcherPID === 0) {
+        const dispatcherArgs = ["--port", dispatcherPort];
+        flags.dispatcherPID = ns.exec(
+          "/services/dispatcher.js",
+          "home",
+          1,
+          ...dispatcherArgs
+        );
+        ns.print(
+          `Launched dispatcher with PID: ${flags.dispatcherPID} and args: ${dispatcherArgs}`
+        );
+        if (flags.dispatcherPID !== 0)
+          ns.toast(`Launched dispatcher with PID: ${flags.dispatcherPID}`);
+        await ns.sleep(1000);
+      }
     }
 
     // use pservs for hack daemon rather than basic hack
@@ -171,31 +181,24 @@ export async function main(ns: NS): Promise<void> {
       flags.upgradedServers &&
       flags.schedulerPID !== 0 &&
       flags.dispatcherPID !== 0 &&
-      hackTargets.length > 0 &&
+      flags.hackDaemonPID === 0 &&
       stats.servers["home"].maxRam - stats.servers["home"].ramUsed >
         ns.getScriptRam("daemons/hack-daemon.js", "home")
     ) {
-      const t = stats.servers[hackTargets[0]];
-
-      if (stats.player.hacking > t.requiredHackingSkill && t.hasAdminRights) {
-        const pid = ns.exec(
-          "daemons/hack-daemon.js",
-          "home",
-          1,
-          "--target",
-          t.hostname,
-          "--loop",
-          "--ramBudget",
-          1.0,
-          "--useScheduler",
-          "--schedulerPort",
-          2
-        );
-        ns.print(
-          `Launching hack-daemon targeting '${t.hostname}' using scheduler with PID: ${pid}`
-        );
-        hackTargets.shift();
-      }
+      flags.hackDaemonPID = ns.exec(
+        "daemons/hack-daemon.js",
+        "home",
+        1,
+        "--loop",
+        "--schedulerPort",
+        schedulerPort,
+        "--dispatcherPort",
+        dispatcherPort
+      );
+      ns.print(`Launching hack-daemon with PID: ${flags.hackDaemonPID}`);
+      if (flags.hackDaemonPID !== 0)
+        ns.toast(`Launched hack-daemon with PID: ${flags.hackDaemonPID}`);
+      await ns.sleep(1000);
     }
 
     // if we have a corporation, launch the corp-daemon to manage it
