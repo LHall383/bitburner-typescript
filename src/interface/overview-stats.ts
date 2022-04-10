@@ -43,7 +43,7 @@ export async function main(ns: NS): Promise<void> {
   ns.print(`Init and cleared port ${args["port"]}`);
 
   // constants used in loop
-  const externalAdditions = {} as Record<string, HUDRequest | undefined>;
+  const externalAdditions = {} as Record<string, HUDRow>;
 
   // Main stats update loop
   while (true) {
@@ -58,10 +58,15 @@ export async function main(ns: NS): Promise<void> {
     // add data from incoming messages
     while (!pHandle.empty()) {
       const message = unpackMessage<HUDRequest>(ns, pHandle.read());
-      if (message)
-        externalAdditions[message.data.id] = message.data.remove
-          ? undefined
-          : message.data;
+      if (message === undefined) continue;
+      if (message.data.remove) {
+        delete externalAdditions[message.data.id];
+      } else {
+        externalAdditions[message.data.id] = {
+          header: message.data.header,
+          fValue: message.data.fValue,
+        } as HUDRow;
+      }
     }
     ns.print(`Adding: ${JSON.stringify(externalAdditions)}`);
 

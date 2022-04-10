@@ -13,7 +13,7 @@ export interface HUDRow {
 
 export interface HUDRequest extends HUDRow {
   id: string;
-  remove?: boolean;
+  remove: boolean;
 }
 
 export interface Stats {

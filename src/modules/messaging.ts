@@ -1,5 +1,5 @@
 import { NetscriptPort, NS } from "@ns";
-import { Message, MessageResponse } from "/types";
+import { HUDRequest, Message, MessageResponse } from "/types";
 
 function hashCode(s: string): number {
   let h = 0;
@@ -91,4 +91,21 @@ export async function getSchedulerMaxRam(
   );
   const res = await sendReceive<number, number>(ns, schedulerPort, ramMessage);
   return res?.data.data || 0;
+}
+
+export function sendHUDRequest(
+  ns: NS,
+  header: string,
+  fValue: string,
+  remove = false,
+  overviewStatsPort = 20
+): void {
+  const pHandle = ns.getPortHandle(overviewStatsPort);
+  const packed = packMessage(ns, `HUD Request from ${ns.getScriptName()}`, {
+    id: header,
+    header,
+    fValue,
+    remove,
+  } as HUDRequest);
+  pHandle.write(packed);
 }
