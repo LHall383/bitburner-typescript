@@ -10,15 +10,6 @@ interface ActionOption {
 }
 
 const bonusTimeMultiplier = 5;
-const contractsNames = ["Tracking", "Retirement", "Bounty Hunter"];
-const operationsNames = [
-  "Investigation",
-  "Undercover Operation",
-  "Sting Operation",
-  "Raid",
-  "Stealth Retirement Operation",
-  "Assassination",
-];
 
 export async function main(ns: NS): Promise<void> {
   const args = ns.flags([["loop", true]]);
@@ -32,6 +23,11 @@ export async function main(ns: NS): Promise<void> {
     ns.print("Not currently in bladeburner division, waiting to join");
     await ns.sleep(1000);
   }
+
+  // some constants
+  const contractsNames = ns.bladeburner.getContractNames();
+  const operationsNames = ns.bladeburner.getOperationNames();
+  const blackOpsNames = ns.bladeburner.getBlackOpNames();
 
   do {
     // handle upgrades
@@ -85,9 +81,17 @@ export async function main(ns: NS): Promise<void> {
       operation.priority =
         operation.count <= 0
           ? 0
-          : Math.pow(operation.successChance[0], 4) * 0.9;
+          : Math.pow(operation.successChance[0], 3) * 0.9;
       actionOptions.push(operation);
     }
+
+    // calculate black ops priority based on success chance
+    const currentBlackOp = _.find(blackOpsNames, (name) =>
+      ns.bladeburner.getActionCountRemaining("blackops", name)
+    ) as string;
+    const blackOp = getActionStats(ns, "blackops", currentBlackOp);
+    blackOp.priority = Math.pow(blackOp.successChance[0], 5);
+    actionOptions.push(blackOp);
 
     // find diff in success chance estimates
     const successRanges = [...contractsStats, ...operationsStats].map(
@@ -99,6 +103,14 @@ export async function main(ns: NS): Promise<void> {
     const fieldAnalysis = getActionStats(ns, "general", "Field Analysis");
     fieldAnalysis.priority = Math.max(...successRanges) > 0 ? 0.7 : 0.0;
     actionOptions.push(fieldAnalysis);
+
+    // priority based on number of available contracts
+    const inciteViolence = getActionStats(ns, "general", "Incite Violence");
+    contractsStats.forEach((s) => {
+      inciteViolence.priority +=
+        (s.count > 0 ? 1 / s.count : 1.0) / contractsStats.length;
+    });
+    actionOptions.push(inciteViolence);
 
     // if we get really low on stamina, may be worth regenerating
     const regenChamber = getActionStats(
@@ -112,7 +124,8 @@ export async function main(ns: NS): Promise<void> {
     // if chaos gets really high, do some diplomacy
     const diplomacy = getActionStats(ns, "general", "Diplomacy");
     diplomacy.priority = Math.min(
-      ns.bladeburner.getCityChaos(ns.bladeburner.getCity()) / 100,
+      (ns.bladeburner.getCityChaos(ns.bladeburner.getCity()) / 30) *
+        (1 - staminaPercent),
       0.95
     );
     actionOptions.push(diplomacy);

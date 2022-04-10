@@ -627,6 +627,11 @@ function calcBestServer(
     const player = stats.player;
     const server = stats.servers[hostname];
 
+    // do some verification here
+    if (!ns.serverExists(hostname) || server === undefined) {
+      continue;
+    }
+
     // we want to calculate profits at min security and max money
     server.hackDifficulty = server.minDifficulty;
     server.moneyAvailable = server.moneyMax;

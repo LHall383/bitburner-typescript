@@ -13,11 +13,14 @@ export async function main(ns: NS): Promise<void> {
   const doc = eval("document") as Document;
   const hook0 = doc.getElementById("overview-extra-hook-0");
   const hook1 = doc.getElementById("overview-extra-hook-1");
-
   if (hook0 === null || hook1 === null) {
     ns.print("Could not get overview hooks");
     return;
   }
+  ns.atExit(() => {
+    hook0.innerHTML = "";
+    hook1.innerHTML = "";
+  });
 
   // Logic for adding a single custom HUD entry
   const newline = (txt: string, tt = "") => {
@@ -65,7 +68,8 @@ export async function main(ns: NS): Promise<void> {
       }
 
       // Clear the previous loop's custom HUDs
-      hook1.innerHTML = hook0.innerHTML = "";
+      hook0.innerHTML = "";
+      hook1.innerHTML = "";
       // Create new HUD elements with info collected above.
       for (const hudRow of hudData) {
         hook0.appendChild(newline(hudRow.header));
