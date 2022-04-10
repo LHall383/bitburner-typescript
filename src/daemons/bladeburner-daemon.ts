@@ -1,4 +1,5 @@
 import { NS } from "@ns";
+import { sendHUDRequest } from "/modules/messaging";
 
 interface ActionOption {
   type: string;
@@ -23,6 +24,11 @@ export async function main(ns: NS): Promise<void> {
     ns.print("Not currently in bladeburner division, waiting to join");
     await ns.sleep(1000);
   }
+
+  // clean up HUD at exit
+  ns.atExit(() => {
+    sendHUDRequest(ns, "BB Rank", "", true);
+  });
 
   // some constants
   const contractsNames = ns.bladeburner.getContractNames();
@@ -139,7 +145,7 @@ export async function main(ns: NS): Promise<void> {
     actionOptions.sort((a, b) => b.priority - a.priority);
     if (actionOptions.length === 0) {
       ns.print("No actions added to priorities");
-      await ns.sleep(100);
+      await ns.asleep(100);
       continue;
     } else {
       ns.print(
@@ -167,19 +173,19 @@ export async function main(ns: NS): Promise<void> {
       bonusTime > 1000
         ? Math.ceil(bestAction.duration / 1000 / bonusTimeMultiplier) * 1000
         : bestAction.duration;
-    // ns.print(`${bonusTime} ${bestAction.duration} ${duration}`);
+
+    // update ui
+    sendHUDRequest(ns, "BB Rank", ns.nFormat(ns.bladeburner.getRank(), "0.0a"));
 
     if (started) {
       ns.print(
         `Action ${bestAction.type} ${bestAction.name} started for ${duration}ms`
       );
-      await ns.sleep(duration);
+      await ns.asleep(duration);
     } else {
       ns.print(`Action ${bestAction.type} ${bestAction.name} failed to start`);
-      await ns.sleep(100);
+      await ns.asleep(100);
     }
-
-    await ns.sleep(1);
   } while (args["loop"]);
 }
 

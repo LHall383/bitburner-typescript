@@ -1,6 +1,6 @@
 import { NS } from "@ns";
 import { getStats } from "/modules/helper";
-import { packMessage, unpackMessage } from "/modules/messaging";
+import { packMessage, sendHUDRequest, unpackMessage } from "/modules/messaging";
 import {
   MessageResponse,
   SchedulerRequest,
@@ -35,6 +35,11 @@ export async function main(ns: NS): Promise<void> {
   ns.disableLog("ALL");
   ns.print("----------Starting scheduler----------");
 
+  // clean up HUD at exit
+  ns.atExit(() => {
+    sendHUDRequest(ns, "Ram Pool", "", true);
+  });
+
   // maintain a copy of the ram pool array, so we can make edits
   const ramPool = _.cloneDeep(args["ramPool"]) as string[];
 
@@ -51,7 +56,7 @@ export async function main(ns: NS): Promise<void> {
   const timedCalls = [
     {
       lastCalled: Date.now(),
-      callEvery: 30 * 1000,
+      callEvery: 1 * 1000,
       callback: async () => await printRamPoolStats(ns, stats, ramPool),
     },
   ] as TimedCall[];
@@ -143,7 +148,7 @@ export async function main(ns: NS): Promise<void> {
       }
     }
 
-    await ns.sleep(1);
+    await ns.asleep(1);
   }
 }
 
@@ -210,5 +215,10 @@ async function printRamPoolStats(ns: NS, stats: Stats, ramPool: string[]) {
       ram.used / ram.total,
       "0.00%"
     )}) -->  ${ns.nFormat(ram.used, "0.0")} / ${ns.nFormat(ram.total, "0.0")}`
+  );
+  sendHUDRequest(
+    ns,
+    "Ram Pool",
+    `${ns.nFormat(ram.used / ram.total, "0.00%")} (${ram.total})`
   );
 }

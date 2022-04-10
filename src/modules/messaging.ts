@@ -55,7 +55,7 @@ export async function sendReceive<T, K>(
   // write message to port
   while (!portHandle.tryWrite(packedMessage)) {
     if (Date.now() > start + timeout) break;
-    await ns.sleep(1);
+    await ns.asleep(1);
   }
 
   // wait for response on port
@@ -74,7 +74,7 @@ export async function sendReceive<T, K>(
       response = unpackMessage<MessageResponse<K>>(ns, portHandle.read());
       break;
     }
-    await ns.sleep(1);
+    await ns.asleep(1);
   }
 
   return response;
