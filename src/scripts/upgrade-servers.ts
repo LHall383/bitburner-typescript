@@ -74,9 +74,9 @@ export async function main(ns: NS): Promise<void> {
       // start maximum number of threads running script
       ns.exec(scriptName, s, threads, "--target", args["target"]);
       ns.print("Started " + threads + " threads of hack on server: " + s);
-      ns.toast(`Upgraded ${s} to ${ram} RAM`, "info");
     }
     ns.print(`All servers up to ${ram} ram`);
+    ns.toast(`All servers up to ${ram} ram`);
 
     await ns.sleep(1);
   }

@@ -11,6 +11,11 @@ export interface HUDRow {
   fValue: string;
 }
 
+export interface HUDRequest extends HUDRow {
+  id: string;
+  remove: boolean;
+}
+
 export interface Stats {
   player: Player;
   servers: Record<string, Server>;

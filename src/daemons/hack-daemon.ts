@@ -4,6 +4,7 @@ import {
   createMessage,
   getSchedulerMaxRam,
   packMessage,
+  sendHUDRequest,
   sendReceive,
 } from "/modules/messaging";
 import {
@@ -62,22 +63,22 @@ export async function main(ns: NS): Promise<void> {
   } as ScriptInfo;
   const scripts = { hackScript, growScript, weakenScript } as ScriptsInfo;
 
-  // calc the most profitable server to hack
-  const maxRamChunk = await getSchedulerMaxRam(ns, args["schedulerPort"]);
+  // clean up HUD at exit
+  ns.atExit(() => {
+    try {
+      sendHUDRequest(ns, "Hack Target", "", true);
+      sendHUDRequest(ns, "Hack Profit", "", true);
+    } catch {
+      console.log("RIP");
+    }
+  });
+
+  // set up a timed job to recheck most profitable server
+  let bestTarget = "";
+  let profit = 0;
   const serverList = JSON.parse(ns.read("/data/flattened-list.txt")).split(
     ","
   ) as string[];
-  let { hostname: bestTarget, profit } = await calcBestServer(
-    ns,
-    maxRamChunk,
-    serverList,
-    scripts
-  );
-  ns.print(
-    `Best hack target is '${bestTarget}' at $${ns.nFormat(profit, "0.0a")}/sec`
-  );
-
-  // set up a timed job to recheck most profitable server
   const timedCalls = [
     {
       lastCalled: Date.now(),
@@ -98,9 +99,13 @@ export async function main(ns: NS): Promise<void> {
             "0.0a"
           )}/sec`
         );
+        sendHUDRequest(ns, "Hack Target", bestTarget);
+        sendHUDRequest(ns, "Hack Profit", `$${ns.nFormat(profit, "0.0a")}/sec`);
       },
     },
   ] as TimedCall[];
+  await timedCalls[0].callback();
+  timedCalls[0].lastCalled = Date.now();
 
   // grow to max money and reduce to min security
   await prepareServer(
@@ -185,16 +190,11 @@ function printServerStats(ns: NS, stats: Server) {
   ns.print(`   Security: ${sp.toFixed(2)}% - ${sec.toFixed(2)} / ${minSec}`);
 }
 
-async function sleepUntil(
-  ns: NS,
-  timeMS: number,
-  useAsleep = false,
-  verbose = true
-) {
+async function sleepUntil(ns: NS, timeMS: number, verbose = true) {
   const sleepTime = Math.floor(timeMS - Date.now());
   if (sleepTime > 0) {
     if (verbose) ns.print(`Sleeping ${sleepTime} until ${msToTime(timeMS)}`);
-    useAsleep ? await ns.asleep(sleepTime) : await ns.sleep(sleepTime);
+    await ns.asleep(sleepTime);
   }
 }
 
@@ -333,11 +333,11 @@ async function runWeakenBatch(
         job
       );
 
-      while (!dPortHandle.tryWrite(packedDispatcherMessage)) await ns.sleep(1);
+      while (!dPortHandle.tryWrite(packedDispatcherMessage)) await ns.asleep(1);
     }
   }
 
-  await sleepUntil(ns, lastBatchTime, false, true);
+  await sleepUntil(ns, lastBatchTime);
 }
 
 async function runGrowWeakenBatch(
@@ -420,11 +420,11 @@ async function runGrowWeakenBatch(
         job
       );
 
-      while (!dPortHandle.tryWrite(packedDispatcherMessage)) await ns.sleep(1);
+      while (!dPortHandle.tryWrite(packedDispatcherMessage)) await ns.asleep(1);
     }
   }
 
-  await sleepUntil(ns, lastBatchTime, false, true);
+  await sleepUntil(ns, lastBatchTime);
 }
 
 async function runHWGWBatch(
@@ -541,11 +541,11 @@ async function runHWGWBatch(
         job
       );
 
-      while (!dPortHandle.tryWrite(packedDispatcherMessage)) await ns.sleep(1);
+      while (!dPortHandle.tryWrite(packedDispatcherMessage)) await ns.asleep(1);
     }
   }
 
-  await sleepUntil(ns, lastBatchTime, false, true);
+  await sleepUntil(ns, lastBatchTime);
 }
 
 async function scheduleBatches(
@@ -626,6 +626,11 @@ function calcBestServer(
   for (const hostname of serverList) {
     const player = stats.player;
     const server = stats.servers[hostname];
+
+    // do some verification here
+    if (!ns.serverExists(hostname) || server === undefined) {
+      continue;
+    }
 
     // we want to calculate profits at min security and max money
     server.hackDifficulty = server.minDifficulty;

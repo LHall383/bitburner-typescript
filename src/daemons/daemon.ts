@@ -59,7 +59,7 @@ export async function main(ns: NS): Promise<void> {
   await ns.sleep(1000);
 
   // put up the stats UI
-  ns.exec("scripts/overview-stats.js", "home", 1);
+  ns.exec("interface/overview-stats.js", "home", 1, "--port", 20);
   ns.print("Launched overview-stats");
   await ns.sleep(1000);
 
