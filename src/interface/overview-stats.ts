@@ -35,7 +35,7 @@ export async function main(ns: NS): Promise<void> {
   };
   const hudData = [] as HUDRow[];
   const addHud = (header: string, fValue: string) =>
-    hudData.push({ header, fValue } as HUDRow);
+    hudData.push({ header: `${header}: `, fValue } as HUDRow);
 
   // init port and clear
   const pHandle = ns.getPortHandle(args["port"]);
