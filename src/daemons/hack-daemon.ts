@@ -65,8 +65,12 @@ export async function main(ns: NS): Promise<void> {
 
   // clean up HUD at exit
   ns.atExit(() => {
-    sendHUDRequest(ns, "Hack Target", "", true);
-    sendHUDRequest(ns, "Hack Profit", "", true);
+    try {
+      sendHUDRequest(ns, "Hack Target", "", true);
+      sendHUDRequest(ns, "Hack Profit", "", true);
+    } catch {
+      console.log("RIP");
+    }
   });
 
   // set up a timed job to recheck most profitable server

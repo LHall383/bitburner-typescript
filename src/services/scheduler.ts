@@ -37,7 +37,11 @@ export async function main(ns: NS): Promise<void> {
 
   // clean up HUD at exit
   ns.atExit(() => {
-    sendHUDRequest(ns, "Ram Pool", "", true);
+    try {
+      sendHUDRequest(ns, "Ram Pool", "", true);
+    } catch {
+      console.log("RIP");
+    }
   });
 
   // maintain a copy of the ram pool array, so we can make edits

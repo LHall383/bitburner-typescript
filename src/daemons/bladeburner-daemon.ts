@@ -27,7 +27,11 @@ export async function main(ns: NS): Promise<void> {
 
   // clean up HUD at exit
   ns.atExit(() => {
-    sendHUDRequest(ns, "BB Rank", "", true);
+    try {
+      sendHUDRequest(ns, "BB Rank", "", true);
+    } catch {
+      console.log("RIP");
+    }
   });
 
   // some constants
