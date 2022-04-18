@@ -79,16 +79,25 @@ export async function main(ns: NS): Promise<void> {
   const serverList = JSON.parse(ns.read("/data/flattened-list.txt")).split(
     ","
   ) as string[];
+  let stats = getStats(ns, [bestTarget, ...serverList]);
   const timedCalls = [
     {
       lastCalled: Date.now(),
       callEvery: 10 * 60 * 1000,
       callback: async () => {
+        const hackableServers = _.filter(serverList, (s) => {
+          return (
+            stats.servers[s].hasAdminRights &&
+            stats.servers[s].requiredHackingSkill < stats.player.hacking &&
+            !stats.servers[s].purchasedByPlayer &&
+            stats.servers[s].hostname !== "home"
+          );
+        });
         const maxRamChunk = await getSchedulerMaxRam(ns, args["schedulerPort"]);
         const response = await calcBestServer(
           ns,
           maxRamChunk,
-          serverList,
+          hackableServers,
           scripts
         );
         bestTarget = response.hostname;
@@ -118,10 +127,9 @@ export async function main(ns: NS): Promise<void> {
   );
 
   // HWGW cycle
-  let stats = getStats(ns, [bestTarget]);
   do {
     // update stats
-    stats = getStats(ns, [bestTarget]);
+    stats = getStats(ns, [bestTarget, ...serverList]);
 
     // if it's time, service these functions
     const now = Date.now();
@@ -601,7 +609,7 @@ function extendBatch(ns: NS, seedBatch: Batch, amount: number): Batch[] {
     for (const job of prevBatch.jobs) {
       const startTime = job.startTime + scheduleBufferTime;
       const endTime = job.endTime + scheduleBufferTime;
-      const name = [job.name.slice(0, -14), msToTime(endTime)].join("");
+      const name = [job.name.slice(0, -15), msToTime(endTime)].join("");
       const args = _.cloneDeep(job.args);
       args[args.length - 1] = name;
       batch.jobs.push({ ...job, startTime, endTime, name, args } as Job);
@@ -742,7 +750,7 @@ function calcHackGrowThreads(
       hThreads--;
       hPercent =
         ns.formulas.hacking.hackPercent(targetStats, playerStats) * hThreads;
-      if (hThreads <= 1) break; // dont hack with less than 1 thread
+      if (hThreads <= 0) break; // dont hack with less than 1 thread
     }
   }
 

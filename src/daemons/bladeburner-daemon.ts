@@ -8,6 +8,7 @@ interface ActionOption {
   duration: number;
   count: number;
   successChance: [number, number];
+  repPerSec: number;
 }
 
 const bonusTimeMultiplier = 5;
@@ -38,25 +39,36 @@ export async function main(ns: NS): Promise<void> {
   const contractsNames = ns.bladeburner.getContractNames();
   const operationsNames = ns.bladeburner.getOperationNames();
   const blackOpsNames = ns.bladeburner.getBlackOpNames();
+  const prioritizeRep = true;
 
   do {
     // handle upgrades
-    const skillOptions = ns.bladeburner.getSkillNames().map((name) => {
-      return { name, cost: ns.bladeburner.getSkillUpgradeCost(name) };
-    });
-    skillOptions.sort((a, b) => a.cost - b.cost);
-    if (
-      skillOptions.length > 0 &&
-      ns.bladeburner.getSkillPoints() > skillOptions[0].cost
-    ) {
-      ns.bladeburner.upgradeSkill(skillOptions[0].name);
-      ns.print(
-        `Upgrading ${skillOptions[0].name} for ${skillOptions[0].cost} SP`
-      );
+    while (true) {
+      const skillOptions = ns.bladeburner.getSkillNames().map((name) => {
+        let cost = ns.bladeburner.getSkillUpgradeCost(name);
+        if (name == "Overclock" && ns.bladeburner.getSkillLevel(name) >= 90)
+          cost = Number.MAX_VALUE;
+        return { name, cost };
+      });
+      skillOptions.sort((a, b) => a.cost - b.cost);
+      if (
+        skillOptions.length > 0 &&
+        ns.bladeburner.getSkillPoints() >= skillOptions[0].cost
+      ) {
+        ns.bladeburner.upgradeSkill(skillOptions[0].name);
+        ns.print(
+          `Upgrading ${skillOptions[0].name} for ${skillOptions[0].cost} SP`
+        );
+        await ns.asleep(1);
+      } else {
+        break;
+      }
     }
 
+    // get some stats
     const [currentStamina, maxStamina] = ns.bladeburner.getStamina();
     const staminaPercent = currentStamina / maxStamina;
+    const rank = ns.bladeburner.getRank();
 
     ns.print(
       `Stamina: ${ns.nFormat(staminaPercent * 100, "0.0")}% ${ns.nFormat(
@@ -68,22 +80,25 @@ export async function main(ns: NS): Promise<void> {
     // add all action options to the array with a calculated priority
     const actionOptions = [] as ActionOption[];
 
-    // calculate contract options based on minimum success chance
+    // calculate contract options based on minimum success chance and rep
     const contractsStats = contractsNames.map((name) =>
       getActionStats(ns, "contracts", name)
     );
+    const maxRepPerSec = Math.max(...contractsStats.map((c) => c.repPerSec));
+    const cSuccessPower = Math.max(2 * (1 - staminaPercent), 0.5);
     for (const contract of contractsStats) {
-      contract.priority =
-        contract.count <= 0
-          ? 0
-          : Math.pow(
-              contract.successChance[0],
-              Math.max(2 * (1 - staminaPercent), 0.5)
-            ) * 0.8;
+      if (contract.count <= 0) {
+        contract.priority = 0;
+      } else {
+        contract.priority =
+          0.8 * Math.pow(contract.successChance[0], cSuccessPower);
+        if (prioritizeRep)
+          contract.priority *= contract.repPerSec / maxRepPerSec;
+      }
       actionOptions.push(contract);
     }
 
-    // calculate operations options based on minimum success chance
+    // calculate operations options based on minimum success chance and rep
     const operationsStats = operationsNames.map((name) =>
       getActionStats(ns, "operations", name)
     );
@@ -100,18 +115,21 @@ export async function main(ns: NS): Promise<void> {
       ns.bladeburner.getActionCountRemaining("blackops", name)
     ) as string;
     const blackOp = getActionStats(ns, "blackops", currentBlackOp);
-    blackOp.priority = Math.pow(blackOp.successChance[0], 5);
+    blackOp.priority = Math.pow(
+      blackOp.successChance[0],
+      Math.max((5 * ns.bladeburner.getBlackOpRank(currentBlackOp)) / rank, 2)
+    );
     actionOptions.push(blackOp);
 
     // find diff in success chance estimates
-    const successRanges = [...contractsStats, ...operationsStats].map(
+    const successRanges = [...contractsStats, ...operationsStats, blackOp].map(
       (actionOption) =>
         actionOption.successChance[1] - actionOption.successChance[0]
     );
 
     // priority based on maximum variance in success estimate
     const fieldAnalysis = getActionStats(ns, "general", "Field Analysis");
-    fieldAnalysis.priority = Math.max(...successRanges) > 0 ? 0.7 : 0.0;
+    fieldAnalysis.priority = Math.max(...successRanges) > 0 ? 0.79 : 0.0;
     actionOptions.push(fieldAnalysis);
 
     // priority based on number of available contracts
@@ -135,7 +153,7 @@ export async function main(ns: NS): Promise<void> {
     const diplomacy = getActionStats(ns, "general", "Diplomacy");
     diplomacy.priority = Math.min(
       (ns.bladeburner.getCityChaos(ns.bladeburner.getCity()) / 30) *
-        (1 - staminaPercent),
+        Math.max(1 - staminaPercent, 0.5),
       0.95
     );
     actionOptions.push(diplomacy);
@@ -194,12 +212,17 @@ export async function main(ns: NS): Promise<void> {
 }
 
 function getActionStats(ns: NS, type: string, name: string): ActionOption {
+  const level = ns.bladeburner.getActionCurrentLevel(type, name);
+  const rep = ns.bladeburner.getActionRepGain(type, name, level);
+  const duration = ns.bladeburner.getActionTime(type, name);
+
   return {
     type,
     name,
     priority: 0,
-    duration: ns.bladeburner.getActionTime(type, name),
+    duration,
     count: ns.bladeburner.getActionCountRemaining(type, name),
     successChance: ns.bladeburner.getActionEstimatedSuccessChance(type, name),
+    repPerSec: rep / (duration / 1000),
   };
 }

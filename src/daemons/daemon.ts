@@ -117,7 +117,7 @@ export async function main(ns: NS): Promise<void> {
     // launch upgrades when servers are fully purchased
     if (flags.purchasedServers && !flags.launchedUpgrades) {
       flags.launchedUpgrades = true;
-      const maxRam = 1024; // ns.getPurchasedServerMaxRam() / Math.pow(2, 10)
+      const maxRam = ns.getPurchasedServerMaxRam() / Math.pow(2, 10); // 1024 GB
       ns.exec(
         "scripts/upgrade-servers.js",
         "home",
