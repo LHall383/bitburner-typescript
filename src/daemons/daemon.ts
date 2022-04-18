@@ -49,17 +49,17 @@ export async function main(ns: NS): Promise<void> {
   } as Flags;
 
   // continuously deploy hack script as we acquire new port cracking programs
-  ns.exec("scripts/continuous-deploy.js", "home", 1, "--target", "n00dles");
+  ns.run("scripts/continuous-deploy.js", 1, "--target", "n00dles");
   ns.print("Launched continuous-deploy");
   await ns.sleep(1000);
 
   // purchase private servers when we have the money
-  ns.exec("scripts/purchase-servers.js", "home", 1, "--target", "n00dles");
+  ns.run("scripts/purchase-servers.js", 1, "--target", "n00dles");
   ns.print("Launched purchase-servers");
   await ns.sleep(1000);
 
   // put up the stats UI
-  ns.exec("interface/overview-stats.js", "home", 1, "--port", 20);
+  ns.run("interface/overview-stats.js", 1, "--port", 20);
   ns.print("Launched overview-stats");
   await ns.sleep(1000);
 
@@ -109,7 +109,7 @@ export async function main(ns: NS): Promise<void> {
 
     // if we have are in bb, launch the bb-daemon to manage it
     if (stats.player.inBladeburner && !flags.bbDaemonPID) {
-      flags.bbDaemonPID = ns.exec("daemons/bladeburner-daemon.js", "home", 1);
+      flags.bbDaemonPID = ns.run("daemons/bladeburner-daemon.js", 1);
       ns.print(`Launching bladeburner-daemon with PID: ${flags.bbDaemonPID}`);
       await ns.sleep(1000);
     }
@@ -118,9 +118,8 @@ export async function main(ns: NS): Promise<void> {
     if (flags.purchasedServers && !flags.launchedUpgrades) {
       flags.launchedUpgrades = true;
       const maxRam = ns.getPurchasedServerMaxRam() / Math.pow(2, 10); // 1024 GB
-      ns.exec(
+      ns.run(
         "scripts/upgrade-servers.js",
-        "home",
         1,
         "--target",
         "n00dles",
@@ -143,9 +142,8 @@ export async function main(ns: NS): Promise<void> {
           schedulerArgs.push("--ramPool");
           schedulerArgs.push(s);
         });
-        flags.schedulerPID = ns.exec(
+        flags.schedulerPID = ns.run(
           "/services/scheduler.js",
-          "home",
           1,
           ...schedulerArgs
         );
@@ -160,9 +158,8 @@ export async function main(ns: NS): Promise<void> {
       // launch dispatcher
       if (flags.dispatcherPID === 0) {
         const dispatcherArgs = ["--port", dispatcherPort];
-        flags.dispatcherPID = ns.exec(
+        flags.dispatcherPID = ns.run(
           "/services/dispatcher.js",
-          "home",
           1,
           ...dispatcherArgs
         );
@@ -185,9 +182,8 @@ export async function main(ns: NS): Promise<void> {
       stats.servers["home"].maxRam - stats.servers["home"].ramUsed >
         ns.getScriptRam("daemons/hack-daemon.js", "home")
     ) {
-      flags.hackDaemonPID = ns.exec(
+      flags.hackDaemonPID = ns.run(
         "daemons/hack-daemon.js",
-        "home",
         1,
         "--loop",
         "--schedulerPort",
@@ -203,12 +199,7 @@ export async function main(ns: NS): Promise<void> {
 
     // if we have a corporation, launch the corp-daemon to manage it
     if (stats.player.hasCorporation && !flags.corpDaemonPID) {
-      flags.corpDaemonPID = ns.exec(
-        "daemons/corp-daemon.js",
-        "home",
-        1,
-        "--loop"
-      );
+      flags.corpDaemonPID = ns.run("daemons/corp-daemon.js", 1, "--loop");
       ns.print(`Launching corp-daemon with PID: ${flags.corpDaemonPID}`);
       await ns.sleep(1000);
     }
@@ -225,7 +216,7 @@ async function launchCodingContracts(ns: NS, stats: Stats): Promise<void> {
     stats.servers["home"].maxRam - stats.servers["home"].ramUsed >
     ns.getScriptRam("/scripts/solve-coding-contracts.js")
   ) {
-    const pid = ns.exec("/scripts/solve-coding-contracts.js", "home", 1);
+    const pid = ns.run("/scripts/solve-coding-contracts.js", 1);
     ns.print(`Launching coding contracts with PID: ${pid}`);
   } else {
     ns.print(`Not enough RAM to run solve-coding-contracts`);
