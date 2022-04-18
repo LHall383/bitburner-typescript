@@ -1,6 +1,69 @@
 import { NS, Server } from "@ns";
 import { Stats } from "/types";
 
+const dataStore = {} as Record<string, { lastFetch: number; data: string }>;
+export async function getDataThroughFile(
+  ns: NS,
+  command: string,
+  fileName: string,
+  maxAge = 0,
+  verbose = false
+): Promise<unknown> {
+  // check data store
+  if (
+    dataStore[command] &&
+    dataStore[command].lastFetch > performance.now() - maxAge
+  ) {
+    if (verbose) {
+      ns.print(
+        `Using data store, fetched at ${msToTime(dataStore[command].lastFetch)}`
+      );
+      ns.print(`Data: ${dataStore[command].data}`);
+    }
+    return JSON.parse(dataStore[command].data);
+  }
+
+  // generate data file name and command file name
+  const commandHash = hashCode(command);
+  const fName = fileName || `temp/data_${commandHash}`;
+  const scriptName = (fName || `/temp/command_${commandHash}`) + ".js";
+
+  // create script
+  const toFile =
+    `let result="";try{result=JSON.stringify(` +
+    command +
+    `);}catch{} const f="${fName}"; if(ns.read(f)!=result) await ns.write(f,result,'w')`;
+  const script =
+    `export async function main(ns) { try { ` +
+    toFile +
+    `} catch(err) { ns.tprint(String(err)); throw(err); } }`;
+  await ns.write(scriptName, script, "w");
+
+  // execute script and wait for it to finish execution
+  const pid = ns.run(scriptName, 1);
+  for (let i = 0; i < 1000; i++) {
+    if (!ns.isRunning(pid, "")) break;
+    await ns.asleep(10);
+  }
+
+  // get results
+  const result = ns.read(fName);
+  if (verbose) ns.print(`Data: ${result}`);
+
+  // put result in data store
+  dataStore[command] = { lastFetch: performance.now(), data: result };
+
+  // read data from file and return
+  return JSON.parse(result);
+}
+
+export function hashCode(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++)
+    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  return h;
+}
+
 export async function connectToSever(
   ns: NS,
   end: string,
