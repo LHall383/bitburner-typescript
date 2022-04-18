@@ -1,5 +1,5 @@
 import { NS, Player, Server } from "@ns";
-import { getStats, msToTime } from "/modules/helper.js";
+import { customGetStats, msToTime } from "/modules/helper.js";
 import {
   createMessage,
   getSchedulerMaxRam,
@@ -79,7 +79,7 @@ export async function main(ns: NS): Promise<void> {
   const serverList = JSON.parse(ns.read("/data/flattened-list.txt")).split(
     ","
   ) as string[];
-  let stats = getStats(ns, [bestTarget, ...serverList]);
+  let stats = customGetStats(ns, [bestTarget, ...serverList]);
   const timedCalls = [
     {
       lastCalled: Date.now(),
@@ -130,7 +130,7 @@ export async function main(ns: NS): Promise<void> {
   // HWGW cycle
   do {
     // update stats
-    stats = getStats(ns, [bestTarget, ...serverList]);
+    stats = customGetStats(ns, [bestTarget, ...serverList]);
 
     // if it's time, service these functions
     const now = Date.now();
@@ -142,7 +142,7 @@ export async function main(ns: NS): Promise<void> {
     }
 
     // if security is not at minimum or money is not at max, notify and fix
-    stats = getStats(ns, [bestTarget]);
+    stats = customGetStats(ns, [bestTarget]);
     if (
       stats.servers[bestTarget].moneyAvailable <
         stats.servers[bestTarget].moneyMax ||
@@ -167,7 +167,7 @@ export async function main(ns: NS): Promise<void> {
     }
 
     // run up to maxBatchCount batches of HWGW
-    stats = getStats(ns, [bestTarget]);
+    stats = customGetStats(ns, [bestTarget]);
     printServerStats(ns, stats.servers[bestTarget]);
     await runHWGWBatch(
       ns,
@@ -244,7 +244,7 @@ async function prepareServer(
   dispatcherPort: number,
   maxBatchCount: number
 ) {
-  let stats = getStats(ns, [target]);
+  let stats = customGetStats(ns, [target]);
   ns.print(`Reducing ${target} to minimum security`);
 
   // weaken to minimum security
@@ -261,7 +261,7 @@ async function prepareServer(
       dispatcherPort,
       maxBatchCount
     );
-    stats = getStats(ns, [target]);
+    stats = customGetStats(ns, [target]);
   }
 
   // grow to maximum money
@@ -278,7 +278,7 @@ async function prepareServer(
       dispatcherPort,
       maxBatchCount
     );
-    stats = getStats(ns, [target]);
+    stats = customGetStats(ns, [target]);
   }
 }
 
@@ -629,7 +629,7 @@ function calcBestServer(
   scripts: ScriptsInfo
 ) {
   // get stats for player and servers
-  const stats = getStats(ns, serverList);
+  const stats = customGetStats(ns, serverList);
 
   const cashPerSec = [] as { hostname: string; profit: number }[];
   for (const hostname of serverList) {
@@ -683,25 +683,26 @@ function calcBestServer(
 function calcServerProfitability(
   ns: NS,
   target: string,
-  targetStats: Server,
+  tarcustomGetStats: Server,
   playerStats: Player,
   maxRamChunk: number,
   hackThreads: number
 ): number {
   // calc hack amount
   const hackPercent =
-    ns.formulas.hacking.hackPercent(targetStats, playerStats) * hackThreads;
-  const hackAmount = hackPercent * targetStats.moneyMax;
+    ns.formulas.hacking.hackPercent(tarcustomGetStats, playerStats) *
+    hackThreads;
+  const hackAmount = hackPercent * tarcustomGetStats.moneyMax;
 
   // calc weaken time
-  const wTime = ns.formulas.hacking.weakenTime(targetStats, playerStats);
+  const wTime = ns.formulas.hacking.weakenTime(tarcustomGetStats, playerStats);
 
   return hackAmount / (wTime / 1000);
 }
 
 function calcHackGrowThreads(
   ns: NS,
-  targetStats: Server,
+  tarcustomGetStats: Server,
   playerStats: Player,
   maxRamChunk: number,
   scripts: ScriptsInfo
@@ -710,13 +711,14 @@ function calcHackGrowThreads(
   const gThreadsMax = Math.floor(maxRamChunk / scripts.growScript.ram);
   const hThreadsMax = Math.floor(maxRamChunk / scripts.hackScript.ram);
   const gPercentMax = ns.formulas.hacking.growPercent(
-    targetStats,
+    tarcustomGetStats,
     gThreadsMax,
     playerStats,
     1
   );
   const hPercentMax =
-    ns.formulas.hacking.hackPercent(targetStats, playerStats) * hThreadsMax;
+    ns.formulas.hacking.hackPercent(tarcustomGetStats, playerStats) *
+    hThreadsMax;
 
   // calculate actual hack/grow threads based on which one will run at max threads
   let hThreads;
@@ -729,7 +731,7 @@ function calcHackGrowThreads(
     while (1 - 1 / gPercent > hPercentMax) {
       gThreads--;
       gPercent = ns.formulas.hacking.growPercent(
-        targetStats,
+        tarcustomGetStats,
         gThreads,
         playerStats,
         1
@@ -737,7 +739,7 @@ function calcHackGrowThreads(
     }
     gThreads++;
     gPercent = ns.formulas.hacking.growPercent(
-      targetStats,
+      tarcustomGetStats,
       gThreads,
       playerStats,
       1
@@ -750,7 +752,8 @@ function calcHackGrowThreads(
     while (1 - 1 / gPercentMax < hPercent) {
       hThreads--;
       hPercent =
-        ns.formulas.hacking.hackPercent(targetStats, playerStats) * hThreads;
+        ns.formulas.hacking.hackPercent(tarcustomGetStats, playerStats) *
+        hThreads;
       if (hThreads <= 0) break; // dont hack with less than 1 thread
     }
   }

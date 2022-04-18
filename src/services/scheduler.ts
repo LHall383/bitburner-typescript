@@ -1,5 +1,5 @@
 import { NS } from "@ns";
-import { getStats } from "/modules/helper";
+import { customGetStats } from "/modules/helper";
 import { packMessage, sendHUDRequest, unpackMessage } from "/modules/messaging";
 import {
   MessageResponse,
@@ -48,7 +48,7 @@ export async function main(ns: NS): Promise<void> {
   const ramPool = _.cloneDeep(args["ramPool"]) as string[];
 
   // for each server in the ram pool, kill all scripts
-  let stats = getStats(ns, ramPool);
+  let stats = customGetStats(ns, ramPool);
   for (const server of ramPool) {
     if (ns.serverExists(server)) {
       ns.killall(server);
@@ -76,7 +76,7 @@ export async function main(ns: NS): Promise<void> {
   ns.print("Ready for service requests!");
   while (true) {
     // update stats
-    stats = getStats(ns, ramPool);
+    stats = customGetStats(ns, ramPool);
     const largestRamChunk = ramPool
       .map((s) => stats.servers[s].maxRam)
       .reduce((a, b) => (a > b ? a : b));

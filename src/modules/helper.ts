@@ -38,7 +38,7 @@ export async function connectToSever(
   return path;
 }
 
-export function getStats(ns: NS, servers: string[] = []): Stats {
+export function customGetStats(ns: NS, servers: string[] = []): Stats {
   const stats = {
     player: ns.getPlayer(),
     servers: {},

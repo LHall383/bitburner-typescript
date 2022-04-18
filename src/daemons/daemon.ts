@@ -1,5 +1,5 @@
 import { NS } from "@ns";
-import { getStats } from "/modules/helper";
+import { customGetStats } from "/modules/helper";
 import { Stats, TimedCall } from "/types";
 
 interface Flags {
@@ -27,7 +27,7 @@ export async function main(ns: NS): Promise<void> {
   ns.print("----------Starting main daemon----------");
 
   // constants used as signals
-  let stats = getStats(ns);
+  let stats = customGetStats(ns);
   const timedCalls = [
     {
       lastCalled: Date.now(),
@@ -79,7 +79,7 @@ export async function main(ns: NS): Promise<void> {
     "phantasy",
     "omega-net",
   ];
-  stats = getStats(ns, ["home", ...hackTargets]);
+  stats = customGetStats(ns, ["home", ...hackTargets]);
 
   // sort hackTargets
   hackTargets.sort(
@@ -91,7 +91,7 @@ export async function main(ns: NS): Promise<void> {
   // main loop
   do {
     // update stats
-    stats = getStats(ns, ["home", ...hackTargets]);
+    stats = customGetStats(ns, ["home", ...hackTargets]);
 
     // read port 1 for global updates
     if (p1Handle.peek() !== "NULL PORT DATA") {
