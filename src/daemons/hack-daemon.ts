@@ -87,6 +87,7 @@ export async function main(ns: NS): Promise<void> {
       callback: async () => {
         const hackableServers = _.filter(serverList, (s) => {
           return (
+            stats.servers[s] &&
             stats.servers[s].hasAdminRights &&
             stats.servers[s].requiredHackingSkill < stats.player.hacking &&
             !stats.servers[s].purchasedByPlayer &&
