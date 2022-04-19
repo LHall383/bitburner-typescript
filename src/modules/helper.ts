@@ -2,33 +2,37 @@ import { NS, Server } from "@ns";
 import { Stats } from "/types";
 
 const dataStore = {} as Record<string, { lastFetch: number; data: string }>;
-export async function getDataThroughFile(
+export async function getNsData(
   ns: NS,
   command: string,
-  fileName: string,
-  maxAge = 0,
+  fileName = undefined as string | undefined,
+  args = [] as string[],
+  maxAge = 10,
   verbose = false
 ): Promise<unknown> {
+  const commandHash = hashCode(command + JSON.stringify(args));
+
   // check data store
   if (
-    dataStore[command] &&
-    dataStore[command].lastFetch > performance.now() - maxAge
+    dataStore[commandHash] &&
+    dataStore[commandHash].lastFetch > performance.now() - maxAge
   ) {
     if (verbose) {
       ns.print(
-        `Using data store, fetched at ${msToTime(dataStore[command].lastFetch)}`
+        `Using data store, fetched at ${msToTime(
+          dataStore[commandHash].lastFetch
+        )}`
       );
-      ns.print(`Data: ${dataStore[command].data}`);
+      ns.print(`Data: ${dataStore[commandHash].data}`);
     }
-    return JSON.parse(dataStore[command].data);
+    return JSON.parse(dataStore[commandHash].data);
   }
 
   // generate data file name and command file name
-  const commandHash = hashCode(command);
-  const fName = fileName || `temp/data_${commandHash}`;
-  const scriptName = (fName || `/temp/command_${commandHash}`) + ".js";
+  const fName = (fileName || `temp/${commandHash}_data`) + ".txt";
+  const scriptName = (fileName || `/temp/${commandHash}_command`) + ".js";
 
-  // create script
+  // create script and write to file
   const toFile =
     `let result="";try{result=JSON.stringify(` +
     command +
@@ -37,10 +41,10 @@ export async function getDataThroughFile(
     `export async function main(ns) { try { ` +
     toFile +
     `} catch(err) { ns.tprint(String(err)); throw(err); } }`;
-  await ns.write(scriptName, script, "w");
+  if (ns.read(scriptName) !== script) await ns.write(scriptName, script, "w");
 
   // execute script and wait for it to finish execution
-  const pid = ns.run(scriptName, 1);
+  const pid = ns.run(scriptName, 1, ...args);
   for (let i = 0; i < 1000; i++) {
     if (!ns.isRunning(pid, "")) break;
     await ns.asleep(10);
@@ -51,7 +55,7 @@ export async function getDataThroughFile(
   if (verbose) ns.print(`Data: ${result}`);
 
   // put result in data store
-  dataStore[command] = { lastFetch: performance.now(), data: result };
+  dataStore[commandHash] = { lastFetch: performance.now(), data: result };
 
   // read data from file and return
   return JSON.parse(result);
