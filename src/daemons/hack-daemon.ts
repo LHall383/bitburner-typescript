@@ -683,26 +683,26 @@ function calcBestServer(
 function calcServerProfitability(
   ns: NS,
   target: string,
-  tarcustomGetStats: Server,
+  targetStats: Server,
   playerStats: Player,
   maxRamChunk: number,
   hackThreads: number
 ): number {
   // calc hack amount
   const hackPercent =
-    ns.formulas.hacking.hackPercent(tarcustomGetStats, playerStats) *
-    hackThreads;
-  const hackAmount = hackPercent * tarcustomGetStats.moneyMax;
+    ns.formulas.hacking.hackPercent(targetStats, playerStats) * hackThreads;
+  const hackAmount = hackPercent * targetStats.moneyMax;
 
   // calc weaken time
-  const wTime = ns.formulas.hacking.weakenTime(tarcustomGetStats, playerStats);
+  const wTime = ns.formulas.hacking.weakenTime(targetStats, playerStats);
 
-  return hackAmount / (wTime / 1000);
+  // expected profit per second
+  return (hackAmount * ns.hackAnalyzeChance(target)) / (wTime / 1000);
 }
 
 function calcHackGrowThreads(
   ns: NS,
-  tarcustomGetStats: Server,
+  targetStats: Server,
   playerStats: Player,
   maxRamChunk: number,
   scripts: ScriptsInfo
@@ -711,14 +711,13 @@ function calcHackGrowThreads(
   const gThreadsMax = Math.floor(maxRamChunk / scripts.growScript.ram);
   const hThreadsMax = Math.floor(maxRamChunk / scripts.hackScript.ram);
   const gPercentMax = ns.formulas.hacking.growPercent(
-    tarcustomGetStats,
+    targetStats,
     gThreadsMax,
     playerStats,
     1
   );
   const hPercentMax =
-    ns.formulas.hacking.hackPercent(tarcustomGetStats, playerStats) *
-    hThreadsMax;
+    ns.formulas.hacking.hackPercent(targetStats, playerStats) * hThreadsMax;
 
   // calculate actual hack/grow threads based on which one will run at max threads
   let hThreads;
@@ -731,7 +730,7 @@ function calcHackGrowThreads(
     while (1 - 1 / gPercent > hPercentMax) {
       gThreads--;
       gPercent = ns.formulas.hacking.growPercent(
-        tarcustomGetStats,
+        targetStats,
         gThreads,
         playerStats,
         1
@@ -739,7 +738,7 @@ function calcHackGrowThreads(
     }
     gThreads++;
     gPercent = ns.formulas.hacking.growPercent(
-      tarcustomGetStats,
+      targetStats,
       gThreads,
       playerStats,
       1
@@ -752,8 +751,7 @@ function calcHackGrowThreads(
     while (1 - 1 / gPercentMax < hPercent) {
       hThreads--;
       hPercent =
-        ns.formulas.hacking.hackPercent(tarcustomGetStats, playerStats) *
-        hThreads;
+        ns.formulas.hacking.hackPercent(targetStats, playerStats) * hThreads;
       if (hThreads <= 0) break; // dont hack with less than 1 thread
     }
   }

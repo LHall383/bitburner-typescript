@@ -176,7 +176,7 @@ export async function main(ns: NS): Promise<void> {
 
     // priority based on maximum variance in success estimate
     const fieldAnalysis = getActionStats(ns, "general", "Field Analysis");
-    fieldAnalysis.priority = Math.max(...successRanges) > 0 ? 0.79 : 0.0;
+    fieldAnalysis.priority = Math.max(...successRanges) > 0 ? 0.91 : 0.0;
     actionOptions.push(fieldAnalysis);
 
     // priority based on number of available contracts
