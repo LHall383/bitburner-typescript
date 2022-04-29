@@ -143,6 +143,11 @@ export async function main(ns: NS): Promise<void> {
 
     // if security is not at minimum or money is not at max, notify and fix
     stats = await customGetStats(ns, [bestTarget]);
+    if (!stats.servers[bestTarget]) {
+      ns.print(`Failed to get stats for best target: ${bestTarget}`);
+      await ns.asleep(1000);
+      continue;
+    }
     if (
       stats.servers[bestTarget].moneyAvailable <
         stats.servers[bestTarget].moneyMax ||

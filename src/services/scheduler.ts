@@ -78,6 +78,7 @@ export async function main(ns: NS): Promise<void> {
     // update stats
     stats = await customGetStats(ns, ramPool);
     const largestRamChunk = ramPool
+      .filter((s) => s in stats.servers)
       .map((s) => stats.servers[s].maxRam)
       .reduce((a, b) => (a > b ? a : b));
 

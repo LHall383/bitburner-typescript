@@ -61,7 +61,7 @@ export async function customGetStats(
     stats.servers = (await getNsData(
       ns,
       "Object.fromEntries( JSON.parse(ns.args[0]).filter((s) => ns.serverExists(s)).map((s) => [s, ns.getServer(s)]) )",
-      "/temp/get-servers",
+      `/temp/get-servers-${hashCode(JSON.stringify(servers))}`,
       [JSON.stringify(servers)]
     )) as Record<string, Server>;
   }
@@ -75,7 +75,7 @@ export async function getNsData(
   command: string,
   fileName = undefined as string | undefined,
   args = [] as string[],
-  maxAge = 10,
+  maxAge = 0,
   verbose = false
 ): Promise<unknown> {
   const commandHash = hashCode(command + JSON.stringify(args));
@@ -179,7 +179,7 @@ export async function scanServers(
         scanMap[name] = (await getNsData(
           ns,
           `ns.scan('${name}')`,
-          `/temp/scan`
+          `/temp/scan-${name}`
         )) as string[];
       }
       const scanList = scanMap[name];
