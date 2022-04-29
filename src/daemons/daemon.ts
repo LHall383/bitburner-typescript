@@ -53,17 +53,38 @@ export async function main(ns: NS): Promise<void> {
   // continuously deploy hack script as we acquire new port cracking programs
   ns.run("scripts/continuous-deploy.js", 1, "--target", "n00dles");
   ns.print("Launched continuous-deploy");
-  await ns.sleep(1000);
+  await ns.asleep(1000);
+
+  // nuke all possible servers (TODO: if no singularity, don't backdoor)
+  const backdoorList = [
+    "CSEC",
+    "avmnite-02h",
+    "I.I.I.I",
+    "run4theh111z",
+    "fulcrumassets",
+  ];
+  const nukeServersArgs = [] as string[];
+  backdoorList.forEach((s) => {
+    nukeServersArgs.push("--backdoor");
+    nukeServersArgs.push(s);
+  });
+  ns.run("scripts/nuke-servers.js", 1, ...nukeServersArgs);
+  ns.print("Launched nuke-servers");
+  await ns.asleep(1000);
 
   // purchase private servers when we have the money
   ns.run("scripts/purchase-servers.js", 1, "--target", "n00dles");
   ns.print("Launched purchase-servers");
-  await ns.sleep(1000);
+  await ns.asleep(1000);
 
   // put up the stats UI
   ns.run("interface/overview-stats.js", 1, "--port", 20);
   ns.print("Launched overview-stats");
-  await ns.sleep(1000);
+  await ns.asleep(1000);
+
+  // TODO: check for singularity for the following scripts
+  // purchase TOR router and darkweb port cracking programs
+  // automatically join factions available to us
 
   // variables used in main loop
   const p1Handle = ns.getPortHandle(1);
@@ -113,7 +134,7 @@ export async function main(ns: NS): Promise<void> {
     if (stats.player.inBladeburner && !flags.bbDaemonPID) {
       flags.bbDaemonPID = ns.run("daemons/bladeburner-daemon.js", 1);
       ns.print(`Launching bladeburner-daemon with PID: ${flags.bbDaemonPID}`);
-      await ns.sleep(1000);
+      await ns.asleep(1000);
     }
 
     // if we are in a gang, launch gang-daemon
@@ -125,7 +146,7 @@ export async function main(ns: NS): Promise<void> {
     if (inGang && !flags.gangDaemonPID) {
       flags.gangDaemonPID = ns.run("daemons/gang-daemon.js", 1);
       ns.print(`Launching gang-daemon with PID: ${flags.gangDaemonPID}`);
-      await ns.sleep(1000);
+      await ns.asleep(1000);
     }
 
     // launch upgrades when servers are fully purchased
@@ -141,7 +162,7 @@ export async function main(ns: NS): Promise<void> {
         maxRam
       );
       ns.print("Launched upgrade-servers");
-      await ns.sleep(1000);
+      await ns.asleep(1000);
     }
 
     // launch scheduler & dispatcher once all scripts are deployed
@@ -166,7 +187,7 @@ export async function main(ns: NS): Promise<void> {
         );
         if (flags.schedulerPID !== 0)
           ns.toast(`Launched scheduler with PID: ${flags.schedulerPID}`);
-        await ns.sleep(1000);
+        await ns.asleep(1000);
       }
 
       // launch dispatcher
@@ -182,7 +203,7 @@ export async function main(ns: NS): Promise<void> {
         );
         if (flags.dispatcherPID !== 0)
           ns.toast(`Launched dispatcher with PID: ${flags.dispatcherPID}`);
-        await ns.sleep(1000);
+        await ns.asleep(1000);
       }
     }
 
@@ -208,20 +229,20 @@ export async function main(ns: NS): Promise<void> {
       ns.print(`Launching hack-daemon with PID: ${flags.hackDaemonPID}`);
       if (flags.hackDaemonPID !== 0)
         ns.toast(`Launched hack-daemon with PID: ${flags.hackDaemonPID}`);
-      await ns.sleep(1000);
+      await ns.asleep(1000);
     }
 
     // if we have a corporation, launch the corp-daemon to manage it
     if (stats.player.hasCorporation && !flags.corpDaemonPID) {
       flags.corpDaemonPID = ns.run("daemons/corp-daemon.js", 1, "--loop");
       ns.print(`Launching corp-daemon with PID: ${flags.corpDaemonPID}`);
-      await ns.sleep(1000);
+      await ns.asleep(1000);
     }
 
     // TODO: share pserv-0 if we aren't using it
     // scp scripts/basic/share.js pserv-0; connect pserv-0; killall; run scripts/basic/share.js -t 256 --loop; home
 
-    await ns.sleep(1000);
+    await ns.asleep(1000);
   } while (args["loop"]);
 }
 

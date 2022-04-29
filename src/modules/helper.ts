@@ -165,18 +165,24 @@ export async function scanServers(
   )) as string[];
   serverList.push(neighbors);
 
+  // mapping of all scans
+  const scanMap = {} as Record<string, string[]>;
+
   // iteratively list more deeply connected servers
   for (let i = 1; i < maxDepth; i++) {
-    const startList = serverList[i];
+    const startList = serverList[i] as string[];
     const connectedList = [] as string[];
 
     // for each name at this level add the connected servers to the next level
     for (const name of startList) {
-      const scanList = (await getNsData(
-        ns,
-        `ns.scan('${name}')`,
-        `/temp/scan`
-      )) as string[];
+      if (!(name in scanMap)) {
+        scanMap[name] = (await getNsData(
+          ns,
+          `ns.scan('${name}')`,
+          `/temp/scan`
+        )) as string[];
+      }
+      const scanList = scanMap[name];
       // verify servers and add
       for (const scannedName of scanList) {
         // dont add previously included servers
