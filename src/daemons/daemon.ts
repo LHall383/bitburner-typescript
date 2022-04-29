@@ -1,5 +1,5 @@
 import { NS } from "@ns";
-import { customGetStats } from "/modules/helper";
+import { customGetStats, getNsData } from "/modules/helper";
 import { Stats, TimedCall } from "/types";
 
 interface Flags {
@@ -9,6 +9,7 @@ interface Flags {
   upgradedServers: boolean;
   bbDaemonPID: number;
   corpDaemonPID: number;
+  gangDaemonPID: number;
   hackDaemonPID: number;
   schedulerPID: number;
   dispatcherPID: number;
@@ -27,7 +28,7 @@ export async function main(ns: NS): Promise<void> {
   ns.print("----------Starting main daemon----------");
 
   // constants used as signals
-  let stats = customGetStats(ns);
+  let stats = await customGetStats(ns);
   const timedCalls = [
     {
       lastCalled: Date.now(),
@@ -42,6 +43,7 @@ export async function main(ns: NS): Promise<void> {
     upgradedServers: false,
     bbDaemonPID: 0,
     corpDaemonPID: 0,
+    gangDaemonPID: 0,
     hackDaemonPID: 0,
     schedulerPID: 0,
     dispatcherPID: 0,
@@ -79,7 +81,7 @@ export async function main(ns: NS): Promise<void> {
     "phantasy",
     "omega-net",
   ];
-  stats = customGetStats(ns, ["home", ...hackTargets]);
+  stats = await customGetStats(ns, ["home", ...hackTargets]);
 
   // sort hackTargets
   hackTargets.sort(
@@ -91,7 +93,7 @@ export async function main(ns: NS): Promise<void> {
   // main loop
   do {
     // update stats
-    stats = customGetStats(ns, ["home", ...hackTargets]);
+    stats = await customGetStats(ns, ["home", ...hackTargets]);
 
     // read port 1 for global updates
     if (p1Handle.peek() !== "NULL PORT DATA") {
@@ -107,10 +109,22 @@ export async function main(ns: NS): Promise<void> {
       }
     }
 
-    // if we have are in bb, launch the bb-daemon to manage it
+    // if we are in bb, launch the bb-daemon to manage it
     if (stats.player.inBladeburner && !flags.bbDaemonPID) {
       flags.bbDaemonPID = ns.run("daemons/bladeburner-daemon.js", 1);
       ns.print(`Launching bladeburner-daemon with PID: ${flags.bbDaemonPID}`);
+      await ns.sleep(1000);
+    }
+
+    // if we are in a gang, launch gang-daemon
+    const inGang = (await getNsData(
+      ns,
+      "ns.gang.inGang()",
+      "/temp/gang-in-gang"
+    )) as boolean;
+    if (inGang && !flags.gangDaemonPID) {
+      flags.gangDaemonPID = ns.run("daemons/gang-daemon.js", 1);
+      ns.print(`Launching gang-daemon with PID: ${flags.gangDaemonPID}`);
       await ns.sleep(1000);
     }
 
@@ -207,7 +221,7 @@ export async function main(ns: NS): Promise<void> {
     // TODO: share pserv-0 if we aren't using it
     // scp scripts/basic/share.js pserv-0; connect pserv-0; killall; run scripts/basic/share.js -t 256 --loop; home
 
-    await ns.sleep(100);
+    await ns.sleep(1000);
   } while (args["loop"]);
 }
 

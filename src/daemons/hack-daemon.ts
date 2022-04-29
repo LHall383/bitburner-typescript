@@ -79,7 +79,7 @@ export async function main(ns: NS): Promise<void> {
   const serverList = JSON.parse(ns.read("/data/flattened-list.txt")).split(
     ","
   ) as string[];
-  let stats = customGetStats(ns, [bestTarget, ...serverList]);
+  let stats = await customGetStats(ns, [bestTarget, ...serverList]);
   const timedCalls = [
     {
       lastCalled: Date.now(),
@@ -101,8 +101,8 @@ export async function main(ns: NS): Promise<void> {
           hackableServers,
           scripts
         );
-        bestTarget = response.hostname;
-        profit = response.profit;
+        bestTarget = response?.hostname || "joesguns";
+        profit = response?.profit || 0;
         ns.print(
           `Best hack target is '${bestTarget}' at $${ns.nFormat(
             profit,
@@ -130,7 +130,7 @@ export async function main(ns: NS): Promise<void> {
   // HWGW cycle
   do {
     // update stats
-    stats = customGetStats(ns, [bestTarget, ...serverList]);
+    stats = await customGetStats(ns, [bestTarget, ...serverList]);
 
     // if it's time, service these functions
     const now = Date.now();
@@ -142,7 +142,7 @@ export async function main(ns: NS): Promise<void> {
     }
 
     // if security is not at minimum or money is not at max, notify and fix
-    stats = customGetStats(ns, [bestTarget]);
+    stats = await customGetStats(ns, [bestTarget]);
     if (
       stats.servers[bestTarget].moneyAvailable <
         stats.servers[bestTarget].moneyMax ||
@@ -167,7 +167,7 @@ export async function main(ns: NS): Promise<void> {
     }
 
     // run up to maxBatchCount batches of HWGW
-    stats = customGetStats(ns, [bestTarget]);
+    stats = await customGetStats(ns, [bestTarget]);
     printServerStats(ns, stats.servers[bestTarget]);
     await runHWGWBatch(
       ns,
@@ -244,7 +244,7 @@ async function prepareServer(
   dispatcherPort: number,
   maxBatchCount: number
 ) {
-  let stats = customGetStats(ns, [target]);
+  let stats = await customGetStats(ns, [target]);
   ns.print(`Reducing ${target} to minimum security`);
 
   // weaken to minimum security
@@ -261,7 +261,7 @@ async function prepareServer(
       dispatcherPort,
       maxBatchCount
     );
-    stats = customGetStats(ns, [target]);
+    stats = await customGetStats(ns, [target]);
   }
 
   // grow to maximum money
@@ -278,7 +278,7 @@ async function prepareServer(
       dispatcherPort,
       maxBatchCount
     );
-    stats = customGetStats(ns, [target]);
+    stats = await customGetStats(ns, [target]);
   }
 }
 
@@ -622,14 +622,14 @@ function extendBatch(ns: NS, seedBatch: Batch, amount: number): Batch[] {
   return batches;
 }
 
-function calcBestServer(
+async function calcBestServer(
   ns: NS,
   maxRamChunk: number,
   serverList: string[],
   scripts: ScriptsInfo
 ) {
   // get stats for player and servers
-  const stats = customGetStats(ns, serverList);
+  const stats = await customGetStats(ns, serverList);
 
   const cashPerSec = [] as { hostname: string; profit: number }[];
   for (const hostname of serverList) {
@@ -673,10 +673,7 @@ function calcBestServer(
     }
   }
 
-  const result = _.maxBy(cashPerSec, (x) => x.profit) as {
-    hostname: string;
-    profit: number;
-  };
+  const result = _.maxBy(cashPerSec, (x) => x.profit);
   return result;
 }
 

@@ -1,5 +1,73 @@
-import { NS, Server } from "@ns";
+import { NS, Player, Server } from "@ns";
 import { Stats } from "/types";
+
+export async function connectToSever(
+  ns: NS,
+  end: string,
+  start = "home",
+  verbose = false
+): Promise<string[]> {
+  const stack = [[start]];
+  let path: string[] = [];
+
+  while (stack.length > 0) {
+    path = stack.pop() ?? [""];
+    if (verbose) ns.print(path);
+
+    const end_node = path[path.length - 1];
+    if (verbose) ns.print(end_node);
+    if (end_node == end) {
+      break;
+    }
+
+    const scan = (await getNsData(
+      ns,
+      `ns.scan('${end_node}')`,
+      "/temp/scan"
+    )) as string[];
+    // ns.scan(end_node);
+    if (verbose) ns.print(scan);
+    scan.forEach((x) => {
+      if (path.includes(x)) {
+        return;
+      }
+
+      const extendedPath = _.cloneDeep(path);
+      extendedPath.push(x);
+      if (verbose) ns.print(extendedPath);
+      stack.push(extendedPath);
+    });
+
+    await ns.asleep(10);
+  }
+
+  return path;
+}
+
+export async function customGetStats(
+  ns: NS,
+  servers: string[] = []
+): Promise<Stats> {
+  const stats = {
+    player: (await getNsData(
+      ns,
+      "ns.getPlayer()",
+      "/temp/get-player"
+    )) as Player,
+    servers: {},
+  } as Stats;
+
+  if (servers.length > 0) {
+    stats.servers = (await getNsData(
+      ns,
+      "Object.fromEntries( JSON.parse(ns.args[0]).filter((s) => ns.serverExists(s)).map((s) => [s, ns.getServer(s)]) )",
+      "/temp/get-servers",
+      [JSON.stringify(servers)]
+    )) as Record<string, Server>;
+  }
+
+  return stats;
+}
 
 const dataStore = {} as Record<string, { lastFetch: number; data: string }>;
 export async function getNsData(
@@ -58,7 +126,13 @@ export async function getNsData(
   dataStore[commandHash] = { lastFetch: performance.now(), data: result };
 
   // read data from file and return
-  return JSON.parse(result);
+  let ret = undefined;
+  try {
+    ret = JSON.parse(result);
+  } catch {
+    ret = undefined;
+  }
+  return ret;
 }
 
 export function hashCode(s: string): number {
@@ -68,57 +142,68 @@ export function hashCode(s: string): number {
   return h;
 }
 
-export async function connectToSever(
-  ns: NS,
-  end: string,
-  start = "home"
-): Promise<string[]> {
-  const stack = [[start]];
-  let path: string[] = [];
-
-  while (stack.length > 0) {
-    path = stack.pop() ?? [""];
-    ns.print(path);
-
-    const end_node = path[path.length - 1];
-    ns.print(end_node);
-    if (end_node == end) {
-      break;
-    }
-
-    const scan = ns.scan(end_node);
-    ns.print(scan);
-    scan.forEach((x) => {
-      if (path.includes(x)) {
-        return;
-      }
-
-      const extendedPath = _.cloneDeep(path);
-      extendedPath.push(x);
-      ns.print(extendedPath);
-      stack.push(extendedPath);
-    });
-
-    await ns.sleep(1);
-  }
-
-  return path;
-}
-
-export function customGetStats(ns: NS, servers: string[] = []): Stats {
-  const stats = {
-    player: ns.getPlayer(),
-    servers: {},
-  } as Stats;
-  servers.forEach((s) => {
-    if (ns.serverExists(s)) stats.servers[s] = ns.getServer(s) as Server;
-  });
-  return stats;
-}
-
 export function msToTime(ms: number): string {
   const timeString = new Date(ms).toLocaleTimeString("en-US");
   const msString = ((ms % 1000) / 1000).toFixed(3).substring(1);
   const ts = [timeString.slice(0, -3), msString, timeString.slice(-3)].join("");
   return ts;
+}
+
+export async function scanServers(
+  ns: NS,
+  omitHome = false,
+  omitPserv = false,
+  maxDepth = 20
+): Promise<string[]> {
+  // seed server list
+  const serverList = [];
+  serverList.push(["home"]);
+  const neighbors = (await getNsData(
+    ns,
+    "ns.scan('home')",
+    "/temp/scan-home"
+  )) as string[];
+  serverList.push(neighbors);
+
+  // iteratively list more deeply connected servers
+  for (let i = 1; i < maxDepth; i++) {
+    const startList = serverList[i];
+    const connectedList = [] as string[];
+
+    // for each name at this level add the connected servers to the next level
+    for (const name of startList) {
+      const scanList = (await getNsData(
+        ns,
+        `ns.scan('${name}')`,
+        `/temp/scan`
+      )) as string[];
+      // verify servers and add
+      for (const scannedName of scanList) {
+        // dont add previously included servers
+        if (
+          scannedName == "home" ||
+          connectedList.includes(scannedName) ||
+          serverList[i - 1].includes(scannedName)
+        ) {
+          continue;
+        }
+        connectedList.push(scannedName);
+      }
+    }
+
+    // ns.print(connectedList);
+    serverList.push(connectedList);
+  }
+
+  // flatten server list into normal array
+  const flattened = serverList
+    .join()
+    .split(",")
+    .filter((s) => s !== "");
+
+  // remove if requested
+  if (omitHome) _.remove(flattened, (hostname) => hostname === "home");
+  if (omitPserv) _.remove(flattened, (hostname) => hostname.includes("pserv"));
+
+  return flattened;
 }
