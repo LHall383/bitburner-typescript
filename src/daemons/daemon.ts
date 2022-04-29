@@ -84,7 +84,13 @@ export async function main(ns: NS): Promise<void> {
 
   // TODO: check for singularity for the following scripts
   // purchase TOR router and darkweb port cracking programs
+  ns.run("scripts/purchase-dw.js", 1);
+  ns.print("Launched purchase-dw");
+  await ns.asleep(1000);
   // automatically join factions available to us
+  ns.run("scripts/join-factions.js", 1);
+  ns.print("Launched join-factions");
+  await ns.asleep(1000);
 
   // variables used in main loop
   const p1Handle = ns.getPortHandle(1);
