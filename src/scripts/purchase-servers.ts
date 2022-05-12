@@ -4,6 +4,7 @@ export async function main(ns: NS): Promise<void> {
   const args = ns.flags([
     ["target", "n00dles"],
     ["upgrade", false],
+    ["budget", 0.8],
   ]);
 
   const startingRam = 8;
@@ -15,11 +16,15 @@ export async function main(ns: NS): Promise<void> {
   for (let i = servers.length; i < ns.getPurchasedServerLimit(); i++) {
     const server = "pserv-" + i;
     ns.print(
-      "Next server cost will be: " + ns.getPurchasedServerCost(startingRam)
+      `Next server cost will be: ${ns.getPurchasedServerCost(
+        startingRam
+      )}, will purchase at: ${
+        ns.getPurchasedServerCost(startingRam) * args["budget"]
+      }`
     );
     while (
       ns.getPurchasedServerCost(startingRam) >
-      ns.getServerMoneyAvailable("home")
+      ns.getServerMoneyAvailable("home") * args["budget"]
     ) {
       await ns.sleep(3000);
     }

@@ -5,7 +5,7 @@ export async function main(ns: NS): Promise<void> {
     ["target", "n00dles"],
     ["minRam", 4],
     ["maxRam", ns.getPurchasedServerMaxRam()],
-    ["budget", 1.0],
+    ["budget", 0.8],
   ]);
 
   ns.disableLog("ALL");
