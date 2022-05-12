@@ -143,7 +143,7 @@ export function hashCode(s: string): number {
 }
 
 export function msToTime(ms: number): string {
-  const timeString = new Date(ms).toLocaleTimeString("en-US");
+  const timeString = new Date(ms).toLocaleTimeString("en-US").padStart(11);
   const msString = ((ms % 1000) / 1000).toFixed(3).substring(1);
   const ts = [timeString.slice(0, -3), msString, timeString.slice(-3)].join("");
   return ts;
@@ -153,6 +153,7 @@ export async function scanServers(
   ns: NS,
   omitHome = false,
   omitPserv = false,
+  omitHacknet = true,
   maxDepth = 20
 ): Promise<string[]> {
   // seed server list
@@ -210,6 +211,8 @@ export async function scanServers(
   // remove if requested
   if (omitHome) _.remove(flattened, (hostname) => hostname === "home");
   if (omitPserv) _.remove(flattened, (hostname) => hostname.includes("pserv"));
+  if (omitHacknet)
+    _.remove(flattened, (hostname) => hostname.includes("hacknet"));
 
   return flattened;
 }

@@ -12,7 +12,7 @@ export async function main(ns: NS): Promise<void> {
   ]);
 
   // seed server list
-  const serverList = await scanServers(ns, true, !args["deployToPserv"]);
+  const serverList = await scanServers(ns, true, !args["deployToPserv"], true);
   ns.print(serverList);
 
   // wait at least 5 seconds so nuke-servers has done its job
