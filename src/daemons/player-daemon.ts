@@ -25,15 +25,17 @@ const crimeNames = [
 export async function main(ns: NS): Promise<void> {
   const args = ns.flags([
     ["loop", true],
-    ["crimeChanceFactor", 1.5],
-    ["crimeTimeFactor", 1.05],
+    ["prioritizeKarma", true],
+    ["crimeChanceFactor", 1.75],
+    ["crimeTimeFactor", 1.0],
   ]);
 
   ns.disableLog("ALL");
 
   // punish slightly for lower chance crimes
-  const getInc = (ci: CrimeInfo) =>
-    (Math.pow(ci.chance, args["crimeChanceFactor"]) * ci.stats.money) /
+  const getPrio = (ci: CrimeInfo) =>
+    (Math.pow(ci.chance, args["crimeChanceFactor"]) *
+      (args["prioritizeKarma"] ? ci.stats.karma : ci.stats.money)) /
     Math.pow(ci.stats.time, args["crimeTimeFactor"]);
 
   do {
@@ -46,13 +48,11 @@ export async function main(ns: NS): Promise<void> {
     )) as CrimeInfo[];
     // ns.print(crimes);
 
-    // select crime with highest expected income per sec
-    crimes.sort((a, b) => getInc(b) - getInc(a));
-    // `${i.name}: ${i.stats.money/i.stats.time} @ ${(i.chance*100).toFixed(2)}%`
-    ns.print(crimes.map((i) => `${i.name}: ${getInc(i)}`));
+    // select crime with highest priority
+    crimes.sort((a, b) => getPrio(b) - getPrio(a));
+    ns.print(crimes.map((i) => `${i.name}: ${getPrio(i)}`));
 
     ns.commitCrime(crimes[0].name);
-
     await ns.asleep(crimes[0].stats.time);
   } while (args["loop"]);
 }
