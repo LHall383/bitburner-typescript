@@ -112,10 +112,12 @@ export async function main(ns: NS): Promise<void> {
           "/temp/connect",
           [JSON.stringify(toServer)]
         )) as boolean[];
-        ns.print(`Navigated successfully: ${connected.every((i) => i)}`);
+        const success =
+          connected && connected.length > 0 && connected.every((i) => i);
+        ns.print(`Navigated successfully: ${success}`);
 
         // install backdoor and navigate back home
-        if (connected.every((i) => i)) {
+        if (success) {
           ns.print(`Backdooring: ${s}`);
           await ns.asleep(100);
           await getNsData(ns, "await ns.installBackdoor()", "/temp/backdoor");
