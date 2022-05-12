@@ -4,7 +4,7 @@ export async function main(ns: NS): Promise<void> {
   const args = ns.flags([["target", "n00dles"]]);
 
   const scriptName = "scripts/deploy-hack.js";
-  ns.exec(scriptName, "home", 1, "--target", args["target"]);
+  ns.run(scriptName, 1, "--target", args["target"]);
 
   let lastPortLimit = 0;
   while (lastPortLimit < 5) {
@@ -34,10 +34,10 @@ export async function main(ns: NS): Promise<void> {
           message: `continuous-deploy launching deploy hack with ${portLimit} ports open`,
         })
       );
-      ns.exec(scriptName, "home", 1, "--target", args["target"]);
+      ns.run(scriptName, 1, "--target", args["target"]);
     }
 
-    await ns.sleep(1000);
+    await ns.sleep(10000);
     lastPortLimit = portLimit;
   }
 

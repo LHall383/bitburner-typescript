@@ -1,4 +1,5 @@
-import { NS } from "@ns";
+import { BladeburnerCurAction, NS } from "@ns";
+import { getNsData } from "/modules/helper";
 import { sendHUDRequest } from "/modules/messaging";
 
 interface ActionOption {
@@ -21,9 +22,19 @@ export async function main(ns: NS): Promise<void> {
   ns.print("----------Staring bladeburner daemon----------");
 
   // make sure we are in the bladeburner division
-  while (!ns.bladeburner.joinBladeburnerDivision()) {
+  let inBB = (await getNsData(
+    ns,
+    "ns.bladeburner.joinBladeburnerDivision()",
+    "/temp/bb-in-bb"
+  )) as boolean;
+  while (!inBB) {
     ns.print("Not currently in bladeburner division, waiting to join");
-    await ns.sleep(1000);
+    await ns.asleep(1000);
+    inBB = (await getNsData(
+      ns,
+      "ns.bladeburner.joinBladeburnerDivision()",
+      "/temp/bb-in-bb"
+    )) as boolean;
   }
 
   // clean up HUD at exit
@@ -35,16 +46,41 @@ export async function main(ns: NS): Promise<void> {
     }
   });
 
-  // some constants
-  const contractsNames = ns.bladeburner.getContractNames();
-  const operationsNames = ns.bladeburner.getOperationNames();
-  const blackOpsNames = ns.bladeburner.getBlackOpNames();
+  // constants and data that doesn't change
+  const contractsNames = (await getNsData(
+    ns,
+    "ns.bladeburner.getContractNames()",
+    "/temp/bb-contract-names"
+  )) as string[];
+  const operationsNames = (await getNsData(
+    ns,
+    "ns.bladeburner.getOperationNames()",
+    "/temp/bb-operation-names"
+  )) as string[];
+  const blackOpsNames = (await getNsData(
+    ns,
+    "ns.bladeburner.getBlackOpNames()",
+    "/temp/bb-operation-names"
+  )) as string[];
+  const blackOpsRanks = (await getNsData(
+    ns,
+    "Object.fromEntries(JSON.parse(ns.args[0]).map((n) => [n, ns.bladeburner.getBlackOpRank(n)]))",
+    "/temp/bb-operation-names",
+    [JSON.stringify(blackOpsNames)]
+  )) as Record<string, number>;
+  const skillNames = (await getNsData(
+    ns,
+    "ns.bladeburner.getSkillNames()",
+    "/temp/bb-skill-names"
+  )) as string[];
   const prioritizeRep = true;
 
   do {
+    const loopStart = performance.now();
+
     // handle upgrades
     while (true) {
-      const skillOptions = ns.bladeburner.getSkillNames().map((name) => {
+      const skillOptions = skillNames.map((name) => {
         let cost = ns.bladeburner.getSkillUpgradeCost(name);
         if (name == "Overclock" && ns.bladeburner.getSkillLevel(name) >= 90)
           cost = Number.MAX_VALUE;
@@ -59,16 +95,27 @@ export async function main(ns: NS): Promise<void> {
         ns.print(
           `Upgrading ${skillOptions[0].name} for ${skillOptions[0].cost} SP`
         );
-        await ns.asleep(1);
+        await ns.asleep(10);
       } else {
         break;
       }
     }
 
-    // get some stats
-    const [currentStamina, maxStamina] = ns.bladeburner.getStamina();
+    // get some stats every loop
+    const [currentStamina, maxStamina] = (await getNsData(
+      ns,
+      "ns.bladeburner.getStamina()",
+      "/temp/bb-stamina"
+    )) as [number, number];
     const staminaPercent = currentStamina / maxStamina;
-    const rank = ns.bladeburner.getRank();
+    const rank = (await getNsData(
+      ns,
+      "ns.bladeburner.getRank()",
+      "/temp/bb-rank"
+    )) as number;
+
+    // update ui
+    sendHUDRequest(ns, "BB Rank", ns.nFormat(rank, "0.0a"));
 
     ns.print(
       `Stamina: ${ns.nFormat(staminaPercent * 100, "0.0")}% ${ns.nFormat(
@@ -117,7 +164,7 @@ export async function main(ns: NS): Promise<void> {
     const blackOp = getActionStats(ns, "blackops", currentBlackOp);
     blackOp.priority = Math.pow(
       blackOp.successChance[0],
-      Math.max((5 * ns.bladeburner.getBlackOpRank(currentBlackOp)) / rank, 2)
+      Math.max((5 * blackOpsRanks[currentBlackOp]) / rank, 2)
     );
     actionOptions.push(blackOp);
 
@@ -129,7 +176,7 @@ export async function main(ns: NS): Promise<void> {
 
     // priority based on maximum variance in success estimate
     const fieldAnalysis = getActionStats(ns, "general", "Field Analysis");
-    fieldAnalysis.priority = Math.max(...successRanges) > 0 ? 0.79 : 0.0;
+    fieldAnalysis.priority = Math.max(...successRanges) > 0 ? 0.91 : 0.0;
     actionOptions.push(fieldAnalysis);
 
     // priority based on number of available contracts
@@ -182,22 +229,39 @@ export async function main(ns: NS): Promise<void> {
       );
     }
 
-    // pick best action and start it
+    // pick best action and switch to it if it doesn't match best action
     const bestAction = actionOptions[0];
-    const started = ns.bladeburner.startAction(
-      bestAction.type,
-      bestAction.name
-    );
+    const currentAction = (await getNsData(
+      ns,
+      "ns.bladeburner.getCurrentAction()",
+      "/temp/bb-current-action"
+    )) as BladeburnerCurAction;
+    if (
+      bestAction.type === currentAction.type &&
+      bestAction.name === currentAction.name
+    ) {
+      ns.print(
+        `Already executing best action: ${bestAction.type} ${bestAction.name}`
+      );
+      await ns.asleep(100);
+      continue;
+    }
+    const started = (await getNsData(
+      ns,
+      `ns.bladeburner.startAction(ns.args[0],ns.args[1])`,
+      "/temp/bb-start-action",
+      [bestAction.type, bestAction.name]
+    )) as boolean;
 
-    // check for bonus time
+    // modify duration based on bonus time
     const bonusTime = ns.bladeburner.getBonusTime();
     const duration =
-      bonusTime > 1000
+      bonusTime > bestAction.duration
         ? Math.ceil(bestAction.duration / 1000 / bonusTimeMultiplier) * 1000
         : bestAction.duration;
 
-    // update ui
-    sendHUDRequest(ns, "BB Rank", ns.nFormat(ns.bladeburner.getRank(), "0.0a"));
+    const loopEnd = performance.now();
+    ns.print(`Loop took ${loopEnd - loopStart} ms`);
 
     if (started) {
       ns.print(

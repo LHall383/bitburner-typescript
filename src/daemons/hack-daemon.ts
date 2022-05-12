@@ -1,5 +1,5 @@
 import { NS, Player, Server } from "@ns";
-import { getStats, msToTime } from "/modules/helper.js";
+import { customGetStats, msToTime } from "/modules/helper.js";
 import {
   createMessage,
   getSchedulerMaxRam,
@@ -79,7 +79,7 @@ export async function main(ns: NS): Promise<void> {
   const serverList = JSON.parse(ns.read("/data/flattened-list.txt")).split(
     ","
   ) as string[];
-  let stats = getStats(ns, [bestTarget, ...serverList]);
+  let stats = await customGetStats(ns, [bestTarget, ...serverList]);
   const timedCalls = [
     {
       lastCalled: Date.now(),
@@ -87,6 +87,7 @@ export async function main(ns: NS): Promise<void> {
       callback: async () => {
         const hackableServers = _.filter(serverList, (s) => {
           return (
+            stats.servers[s] &&
             stats.servers[s].hasAdminRights &&
             stats.servers[s].requiredHackingSkill < stats.player.hacking &&
             !stats.servers[s].purchasedByPlayer &&
@@ -100,8 +101,8 @@ export async function main(ns: NS): Promise<void> {
           hackableServers,
           scripts
         );
-        bestTarget = response.hostname;
-        profit = response.profit;
+        bestTarget = response?.hostname || "joesguns";
+        profit = response?.profit || 0;
         ns.print(
           `Best hack target is '${bestTarget}' at $${ns.nFormat(
             profit,
@@ -129,7 +130,7 @@ export async function main(ns: NS): Promise<void> {
   // HWGW cycle
   do {
     // update stats
-    stats = getStats(ns, [bestTarget, ...serverList]);
+    stats = await customGetStats(ns, [bestTarget, ...serverList]);
 
     // if it's time, service these functions
     const now = Date.now();
@@ -141,7 +142,12 @@ export async function main(ns: NS): Promise<void> {
     }
 
     // if security is not at minimum or money is not at max, notify and fix
-    stats = getStats(ns, [bestTarget]);
+    stats = await customGetStats(ns, [bestTarget]);
+    if (!stats.servers[bestTarget]) {
+      ns.print(`Failed to get stats for best target: ${bestTarget}`);
+      await ns.asleep(1000);
+      continue;
+    }
     if (
       stats.servers[bestTarget].moneyAvailable <
         stats.servers[bestTarget].moneyMax ||
@@ -166,7 +172,7 @@ export async function main(ns: NS): Promise<void> {
     }
 
     // run up to maxBatchCount batches of HWGW
-    stats = getStats(ns, [bestTarget]);
+    stats = await customGetStats(ns, [bestTarget]);
     printServerStats(ns, stats.servers[bestTarget]);
     await runHWGWBatch(
       ns,
@@ -243,7 +249,7 @@ async function prepareServer(
   dispatcherPort: number,
   maxBatchCount: number
 ) {
-  let stats = getStats(ns, [target]);
+  let stats = await customGetStats(ns, [target]);
   ns.print(`Reducing ${target} to minimum security`);
 
   // weaken to minimum security
@@ -260,7 +266,7 @@ async function prepareServer(
       dispatcherPort,
       maxBatchCount
     );
-    stats = getStats(ns, [target]);
+    stats = await customGetStats(ns, [target]);
   }
 
   // grow to maximum money
@@ -277,7 +283,7 @@ async function prepareServer(
       dispatcherPort,
       maxBatchCount
     );
-    stats = getStats(ns, [target]);
+    stats = await customGetStats(ns, [target]);
   }
 }
 
@@ -621,14 +627,14 @@ function extendBatch(ns: NS, seedBatch: Batch, amount: number): Batch[] {
   return batches;
 }
 
-function calcBestServer(
+async function calcBestServer(
   ns: NS,
   maxRamChunk: number,
   serverList: string[],
   scripts: ScriptsInfo
 ) {
   // get stats for player and servers
-  const stats = getStats(ns, serverList);
+  const stats = await customGetStats(ns, serverList);
 
   const cashPerSec = [] as { hostname: string; profit: number }[];
   for (const hostname of serverList) {
@@ -672,10 +678,7 @@ function calcBestServer(
     }
   }
 
-  const result = _.maxBy(cashPerSec, (x) => x.profit) as {
-    hostname: string;
-    profit: number;
-  };
+  const result = _.maxBy(cashPerSec, (x) => x.profit);
   return result;
 }
 
@@ -695,7 +698,8 @@ function calcServerProfitability(
   // calc weaken time
   const wTime = ns.formulas.hacking.weakenTime(targetStats, playerStats);
 
-  return hackAmount / (wTime / 1000);
+  // expected profit per second
+  return (hackAmount * ns.hackAnalyzeChance(target)) / (wTime / 1000);
 }
 
 function calcHackGrowThreads(
