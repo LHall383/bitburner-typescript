@@ -1,4 +1,4 @@
-import { NS } from "@ns";
+import { BitNodeMultipliers, NS } from "@ns";
 import { customGetStats, getNsData } from "/modules/helper";
 import { Stats, TimedCall } from "/types";
 
@@ -49,6 +49,13 @@ export async function main(ns: NS): Promise<void> {
     dispatcherPID: 0,
     timedCalls: timedCalls,
   } as Flags;
+
+  // bitnode multipliers, these shouldn't change
+  const bnMult = (await getNsData(
+    ns,
+    "ns.getBitNodeMultipliers()",
+    "/temp/bn-multipliers"
+  )) as BitNodeMultipliers;
 
   // continuously deploy hack script as we acquire new port cracking programs
   ns.run("scripts/continuous-deploy.js", 1, "--target", "n00dles");
@@ -158,7 +165,16 @@ export async function main(ns: NS): Promise<void> {
     // launch upgrades when servers are fully purchased
     if (flags.purchasedServers && !flags.launchedUpgrades) {
       flags.launchedUpgrades = true;
-      const maxRam = ns.getPurchasedServerMaxRam() / Math.pow(2, 10); // 1024 GB
+      // scale max ram with hacking level/exp multipliers
+      const power =
+        (10 / (stats.player.hacking_exp_mult * bnMult.HackExpGain) +
+          10 / (stats.player.hacking_mult * bnMult.HackingLevelMultiplier)) /
+        2;
+      const divisor = Math.pow(2, Math.round(Math.max(Math.min(power, 15), 0)));
+      const maxRam = ns.getPurchasedServerMaxRam() / divisor;
+      ns.print(`Power: ${power}`);
+      ns.print(`Divisor: ${divisor}`);
+      ns.print(`Ram: ${maxRam}`);
       ns.run(
         "scripts/upgrade-servers.js",
         1,
@@ -245,6 +261,9 @@ export async function main(ns: NS): Promise<void> {
       await ns.asleep(1000);
     }
 
+    // manage hashes each loop
+    await manageHashes(ns);
+
     // TODO: share pserv-0 if we aren't using it
     // scp scripts/basic/share.js pserv-0; connect pserv-0; killall; run scripts/basic/share.js -t 256 --loop; home
 
@@ -300,5 +319,18 @@ function handleP1Message(ns: NS, message: string | number, flags: Flags): void {
     }
   } catch (e) {
     ns.print(message);
+  }
+}
+
+async function manageHashes(ns: NS): Promise<void> {
+  // get hash stats
+  const hashCap = ns.hacknet.hashCapacity();
+  let hashes = ns.hacknet.numHashes();
+
+  // if we are over threshold sell hashes
+  while (hashes > hashCap * 0.95) {
+    ns.hacknet.spendHashes("Sell for Money");
+    hashes = ns.hacknet.numHashes();
+    await ns.asleep(1);
   }
 }
